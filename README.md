@@ -45,8 +45,8 @@
 
 ## 🤔 How to use
 
-1. 💡 Download Eureka (https://eureka.codingclip.cc/). It requires Tampermonkey or ViolentMonkey. If you don't know how to do, search How to use Tampermonkey scripts.
-2. 😼 Open Scratch website (https://cocrea.world/gandi, https://ccw.site/gandi, https://scratch.mit.edu/projects/editor/, https://turbowarp.org/editor, etc.).
+1. 💡 Download [Eureka](https://eureka.codingclip.cc/). It requires Tampermonkey or ViolentMonkey. If you don't know how to do, search How to use Tampermonkey scripts.
+2. 😼 Open Scratch website ([Gandi](https://cocrea.world/gandi), [Co-create world](https://ccw.site/gandi), [scratch.mit.edu](https://scratch.mit.edu/projects/editor/), [Turbowarp](https://turbowarp.org/editor), etc.).
 3. 🛠️ Scroll to My blocks and you will see Eureka.
 4. 🐺 Use Sideload from File and 🎉! Lpp is ready to use.
 
