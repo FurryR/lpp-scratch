@@ -2986,7 +2986,9 @@
             blockType: 'reporter',
             text: '[value][name]',
             arguments: {
-              value: {},
+              value: {
+                type: 'any'
+              },
               name: {
                 type: 'string',
                 defaultValue: 'foo'
@@ -2998,12 +3000,12 @@
             blockType: 'reporter',
             text: '[lhs][op][rhs]',
             arguments: {
-              lhs: {},
+              lhs: { type: 'any' },
               op: {
                 type: 'string',
                 menu: 'dummy'
               },
-              rhs: {}
+              rhs: { type: 'any' }
             }
           },
           {
@@ -3015,7 +3017,7 @@
                 type: 'string',
                 menu: 'dummy'
               },
-              obj: {}
+              obj: { type: 'any' }
             }
           },
           {
@@ -3023,7 +3025,7 @@
             blockType: 'reporter',
             text: '[fn]',
             arguments: {
-              fn: {}
+              fn: { type: 'any' }
             }
           },
           {
@@ -3031,7 +3033,7 @@
             blockType: 'reporter',
             text: '[fn]',
             arguments: {
-              fn: {}
+              fn: { type: 'any' }
             }
           },
           {
@@ -3060,7 +3062,7 @@
             blockType: 'command',
             text: '[value]',
             arguments: {
-              value: {}
+              value: { type: 'any' }
             }
           },
           {
@@ -3069,7 +3071,7 @@
             blockType: 'command',
             text: '[value]',
             arguments: {
-              value: {}
+              value: { type: 'any' }
             }
           },
           {
@@ -3082,7 +3084,7 @@
             blockType: 'command',
             text: '[var]',
             arguments: {
-              var: {}
+              var: { type: 'any' }
             }
           },
           {
@@ -3090,7 +3092,7 @@
             blockType: 'command',
             text: '[value]',
             arguments: {
-              value: {}
+              value: { type: 'any' }
             }
           }
         ],
