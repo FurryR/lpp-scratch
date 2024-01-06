@@ -59,7 +59,7 @@
 
 </div>
 
-1. 💡 Download [Eureka](https://eureka.codingclip.cc/). Please note that you need to install [`Tampermonkey`](https://www.tampermonkey.net/) or [`ViolentMonkey`](https://violentmonkey.github.io/get-it/) first. Click on the names to navigate to its install page.
+1. 💡 Download [`Eureka`](https://eureka.codingclip.cc/). Please note that you need to install [`Tampermonkey`](https://www.tampermonkey.net/) or [`ViolentMonkey`](https://violentmonkey.github.io/get-it/) first. Click on the names to navigate to its install page.
 
 <div align="center">
 
@@ -67,7 +67,7 @@
 
 </div>
 
-3. 😼 Open a (supported) Scratch website ([Gandi](https://cocrea.world/gandi), [Co-create world](https://ccw.site/gandi), [scratch.mit.edu](https://scratch.mit.edu/projects/editor/), [Turbowarp](https://turbowarp.org/editor), etc.).
+3. 😼 Open a (supported) Scratch website ([`Gandi`](https://cocrea.world/gandi), [`Co-create world`](https://ccw.site/gandi), [`scratch.mit.edu`](https://scratch.mit.edu/projects/editor/), [Turbowarp](https://turbowarp.org/editor), etc.).
 
 <div align="center">
 
