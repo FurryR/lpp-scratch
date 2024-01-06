@@ -3129,77 +3129,15 @@
       return this.builtinType(args)
     }
     /**
-     * Get Boolean class.
-     * @returns {LppFunction} Boolean class.
-     */
-    Boolean() {
-      const instance = global.get('Boolean')
-      if (instance instanceof LppFunction) {
-        return instance
-      }
-      throw new Error('Lpp: Not implemented')
-    }
-    /**
-     * Get Number class.
-     * @returns {LppFunction} Number class.
-     */
-    Number() {
-      const instance = global.get('Number')
-      if (instance instanceof LppFunction) {
-        return instance
-      }
-      throw new Error('Lpp: Not implemented')
-    }
-    /**
-     * Get String class.
-     * @returns {LppFunction} String class.
-     */
-    String() {
-      const instance = global.get('String')
-      if (instance instanceof LppFunction) {
-        return instance
-      }
-      throw new Error('Lpp: Not implemented')
-    }
-    /**
-     * Get Array class.
-     * @returns {LppFunction} Array class.
-     */
-    Array() {
-      const instance = global.get('Array')
-      if (instance instanceof LppFunction) {
-        return instance
-      }
-      throw new Error('Lpp: Not implemented')
-    }
-    /**
-     * Get Object class.
-     * @returns {LppFunction} Object class.
-     */
-    Object() {
-      const instance = global.get('Object')
-      if (instance instanceof LppFunction) {
-        return instance
-      }
-      throw new Error('Lpp: Not implemented')
-    }
-    /**
-     * Get Function class.
-     * @returns {LppFunction} Function class.
-     */
-    Function() {
-      const instance = global.get('Function')
-      if (instance instanceof LppFunction) {
-        return instance
-      }
-      throw new Error('Lpp: Not implemented')
-    }
-    /**
      * Get literal value.
-     * @param {{ value: unknown }} param0 Arguments.
-     * @returns {LppConstant} Constant value.
+     * @param {{ value: unknown }} args Arguments.
+     * @param {any} util Scratch util.
+     * @returns {LppConstant | undefined} Constant value.
      */
-    constructLiteral({ value }) {
+    constructLiteral(args, util) {
+      const { value } = args
+      if (this.isMutatorClick(args, util.thread))
+        return util.thread.stopThisScript()
       switch (value) {
         case 'null':
           return LppConstant.init(null)
@@ -3216,10 +3154,15 @@
     }
     /**
      * Get member from value.
-     * @param {{ value: unknown, name: unknown }} param0
+     * @param {{ value: unknown, name: unknown }} args Arguments.
+     * @param {any} util Scratch util.
+     * @returns {LppValue | LppChildValue | undefined} Result.
      */
-    get({ value, name }) {
+    get(args, util) {
+      const { value, name } = args
       try {
+        if (this.isMutatorClick(args, util.thread))
+          return util.thread.stopThisScript()
         if (value instanceof LppValue || value instanceof LppChildValue) {
           if (typeof name === 'string' || typeof name === 'number') {
             return value.get(`${name}`)
@@ -3238,10 +3181,15 @@
     }
     /**
      * Make binary calculations.
-     * @param {{lhs: unknown, op: string | number, rhs: unknown}} param0 Arguments.
+     * @param {{lhs: unknown, op: string | number, rhs: unknown}} args Arguments.
+     * @param {any} util Scratch util.
+     * @returns {LppValue | LppChildValue | undefined} Result.
      */
-    binaryOp({ lhs, op, rhs }) {
+    binaryOp(args, util) {
+      const { lhs, op, rhs } = args
       try {
+        if (this.isMutatorClick(args, util.thread))
+          return util.thread.stopThisScript()
         if (
           (lhs instanceof LppValue || lhs instanceof LppChildValue) &&
           (rhs instanceof LppValue || rhs instanceof LppChildValue)
@@ -3289,7 +3237,7 @@
     }
     /**
      * Call function with arguments.
-     * @param {{fn: unknown} & Record<string, unknown>} args The function and arguments.
+     * @param {{fn: unknown, mutation: { length: string }} & Record<string, unknown>} args The function and arguments.
      * @param {any} util Scratch util.
      * @returns {Promise<LppValue> | LppValue | undefined} Function result.
      */
@@ -3302,16 +3250,14 @@
          */
         const actualArgs = []
         // runtime hack by @FurryR.
-        if (this.isMutatorClick(args, thread)) return
-        const block = this.getActiveBlockInstance(args, thread)
-        for (const [key, value] of Object.entries(args)) {
-          // ARG_0 -> 0
-          const index = parseInt(key.substring(4), 10)
-          if (index < block.mutation.length) {
-            if (value instanceof LppValue || value instanceof LppChildValue)
-              actualArgs[index] = ensureValue(value)
-            else throw new LppError('syntaxError')
-          }
+        if (this.isMutatorClick(args, thread))
+          return util.thread.stopThisScript()
+        const len = parseInt(args.mutation.length, 10)
+        for (let i = 0; i < len; i++) {
+          const value = args[`ARG_${i}`]
+          if (value instanceof LppValue || value instanceof LppChildValue)
+            actualArgs[i] = ensureValue(value)
+          else throw new LppError('syntaxError')
         }
         if (!(fn instanceof LppValue || fn instanceof LppChildValue))
           throw new LppError('syntaxError')
@@ -3337,7 +3283,7 @@
     }
     /**
      * Generate a new object by function with arguments.
-     * @param {{fn: unknown} & Record<string, unknown>} args The function and arguments.
+     * @param {{fn: unknown, mutation: { length: string }} & Record<string, unknown>} args The function and arguments.
      * @param {any} util Scratch util.
      * @returns {Promise<LppValue> | LppValue | undefined} Result.
      */
@@ -3351,9 +3297,9 @@
          */
         const actualArgs = []
         // runtime hack by @FurryR.
-        if (this.isMutatorClick(args, thread)) return
-        const block = this.getActiveBlockInstance(args, thread)
-        const len = parseInt(block.mutation.length, 10)
+        if (this.isMutatorClick(args, thread))
+          return util.thread.stopThisScript()
+        const len = parseInt(args.mutation.length, 10)
         for (let i = 0; i < len; i++) {
           const value = args[`ARG_${i}`]
           if (value instanceof LppValue || value instanceof LppChildValue)
@@ -3378,11 +3324,14 @@
     }
     /**
      * Return self object.
-     * @param {unknown} _ unnecessary argument.
+     * @param {unknown} args unnecessary argument.
      * @param {any} util Scratch util.
+     * @returns {LppValue | undefined} Result.
      */
-    self(_, util) {
+    self(args, util) {
       try {
+        if (this.isMutatorClick(args, util.thread))
+          return util.thread.stopThisScript()
         if (util.thread.lpp) {
           const unwind = util.thread.lpp.unwind()
           if (unwind) return unwind.self
@@ -3416,10 +3365,10 @@
      */
     constructArray(args, util) {
       try {
-        if (this.isMutatorClick(args, util.thread)) return
-        const block = this.getActiveBlockInstance(args, util.thread)
+        if (this.isMutatorClick(args, util.thread))
+          return util.thread.stopThisScript()
         const arr = new LppArray([])
-        const len = parseInt(block.mutation.length, 10)
+        const len = parseInt(args.mutation.length, 10)
         for (let i = 0; i < len; i++) {
           let value = args[`ARG_${i}`]
           if (!(value instanceof LppValue || value instanceof LppChildValue))
@@ -3440,10 +3389,10 @@
      */
     constructObject(args, util) {
       try {
-        if (this.isMutatorClick(args, util.thread)) return
-        const block = this.getActiveBlockInstance(args, util.thread)
+        if (this.isMutatorClick(args, util.thread))
+          return util.thread.stopThisScript()
         const obj = new LppObject()
-        const len = parseInt(block.mutation.length, 10)
+        const len = parseInt(args.mutation.length, 10)
         for (let i = 0; i < len; i++) {
           let key = args[`KEY_${i}`]
           let value = args[`VALUE_${i}`]
@@ -3477,7 +3426,8 @@
       try {
         this.prepareConstructor(util)
         // runtime hack by @FurryR.
-        if (this.isMutatorClick(args, util.thread)) return
+        if (this.isMutatorClick(args, util.thread))
+          return util.thread.stopThisScript()
         const block = this.getActiveBlockInstance(args, util.thread)
         /**
          * @type {string[]}
@@ -3565,14 +3515,16 @@
     }
     /**
      * Get value of specified function variable.
-     * @param {{name: string}} param0 Variable name.
+     * @param {{name: string}} args Variable name.
      * @param {any} util Scratch util.
-     * @returns {LppChildValue} The value of the variable. If it is not exist, returns null instead.
+     * @returns {LppChildValue | undefined} The value of the variable. If it is not exist, returns null instead.
      */
-    var({ name }, util) {
+    var(args, util) {
       try {
+        if (this.isMutatorClick(args, util.thread))
+          return util.thread.stopThisScript()
         if (util.thread.lpp) {
-          return util.thread.lpp.get(name)
+          return util.thread.lpp.get(args.name)
         }
         throw new LppError('useOutsideContext')
       } catch (e) {
@@ -3581,11 +3533,14 @@
     }
     /**
      * Return a value from the function.
-     * @param {{value: unknown}} param0 Return value.
+     * @param {{value: unknown}} args Return value.
      * @param {any} util Scratch util.
      */
-    return({ value }, util) {
+    return(args, util) {
+      const { value } = args
       try {
+        if (this.isMutatorClick(args, util.thread))
+          return util.thread.stopThisScript()
         if (!(value instanceof LppValue || value instanceof LppChildValue))
           throw new LppError('syntaxError')
         const val = ensureValue(value)
@@ -3603,11 +3558,14 @@
     }
     /**
      * Throw a value from the function.
-     * @param {{value: unknown}} param0 Exception.
+     * @param {{value: unknown}} args Exception.
      * @param {any} util Scratch util.
      */
-    throw({ value }, util) {
+    throw(args, util) {
+      const { value } = args
       try {
+        if (this.isMutatorClick(args, util.thread))
+          return util.thread.stopThisScript()
         if (!(value instanceof LppValue || value instanceof LppChildValue))
           throw new LppError('syntaxError')
         const val = ensureValue(value)
@@ -3633,6 +3591,8 @@
      */
     scope(args, util) {
       try {
+        if (this.isMutatorClick(args, util.thread))
+          return util.thread.stopThisScript()
         this.prepareConstructor(util)
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, util.thread)
@@ -3686,6 +3646,8 @@
      */
     try(args, util) {
       try {
+        if (this.isMutatorClick(args, util.thread))
+          return util.thread.stopThisScript()
         this.prepareConstructor(util)
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, util.thread)
@@ -3779,10 +3741,13 @@
     }
     /**
      * Drops the value of specified expression.
-     * @param {unknown} _ Unneccessary argument.
+     * @param {unknown} args Unneccessary argument.
      * @param {any} util Scratch util.
      */
-    semi(_, util) {}
+    semi(args, util) {
+      if (this.isMutatorClick(args, util.thread))
+        return util.thread.stopThisScript()
+    }
 
     /**
      * Handle syntax error.
@@ -3847,7 +3812,11 @@
             !flag
           ) {
             // Lazy compilation in order to step thread immediately.
-            if (!thread.isCompiled && this.runtime.compilerOptions?.enabled) {
+            if (
+              thread.peekStack() &&
+              !thread.isCompiled &&
+              this.runtime.compilerOptions?.enabled
+            ) {
               const nextBlock = thread.blockContainer.getNextBlock(
                 thread.topBlock
               )
@@ -3939,6 +3908,7 @@
     }
     /**
      * Get active block instance of specified thread.
+     * @warning Avoid where possible. Only use it if you need to get substack.
      * @param {object} args Block arguments.
      * @param {any} thread Thread.
      * @returns {any} Block instance.
