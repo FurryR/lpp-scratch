@@ -91,6 +91,9 @@
       'lpp.error.blockNotFound':
         'Unable to find the block in Blockly workspace. The block might not belong to the target that you are currently editing.',
       'lpp.error.position': 'Position:',
+      'lpp.error.context': 'Context:',
+      'lpp.error.self': 'Self:',
+      'lpp.error.arguments': 'Arguments:',
       'lpp.error.hint':
         'For further information please check DevTools Console.',
       // Category
@@ -199,6 +202,9 @@
       'lpp.error.blockNotFound':
         '无法在 Blockly 工作区中找到积木。该积木可能并不属于当前正编辑的角色。',
       'lpp.error.position': '位置：',
+      'lpp.error.context': '上下文：',
+      'lpp.error.self': '自身：',
+      'lpp.error.arguments': '参数：',
       'lpp.error.hint': '详细内容在 DevTools Console 内。',
       // 分类
       'lpp.category.builtin': '内嵌',
@@ -2015,7 +2021,7 @@
             const svgRoot = this.Blockly.getMainWorkspace()
               .getBlockById(value.block)
               ?.getSvgRoot()
-            console.groupCollapsed(`📌 ${idx + 1} -> ${value}`)
+            console.groupCollapsed(`📌 ${idx + 1} ->`, value.block)
             if (svgRoot) {
               this.showTraceback(svgRoot)
               console.log(svgRoot)
@@ -2042,7 +2048,7 @@
           }
         } else {
           if (value instanceof LppBlockTraceback) {
-            console.log(`📌 ${idx + 1} -> ${value.block}`)
+            console.log(`📌 ${idx + 1} ->`, value.block)
           } else {
             console.log(`📌 ${idx + 1} -> <Native Function>`)
           }
@@ -3138,8 +3144,7 @@
      */
     constructLiteral(args, util) {
       const { value } = args
-      if (this.isMutatorClick(args, util.thread))
-        return util.thread.stopThisScript()
+      if (this.shouldExit(args, util)) return util.thread.stopThisScript()
       switch (value) {
         case 'null':
           return LppConstant.init(null)
@@ -3163,8 +3168,7 @@
     get(args, util) {
       const { value, name } = args
       try {
-        if (this.isMutatorClick(args, util.thread))
-          return util.thread.stopThisScript()
+        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
         if (value instanceof LppValue || value instanceof LppChildValue) {
           if (typeof name === 'string' || typeof name === 'number') {
             return value.get(`${name}`)
@@ -3190,8 +3194,7 @@
     binaryOp(args, util) {
       const { lhs, op, rhs } = args
       try {
-        if (this.isMutatorClick(args, util.thread))
-          return util.thread.stopThisScript()
+        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
         if (
           (lhs instanceof LppValue || lhs instanceof LppChildValue) &&
           (rhs instanceof LppValue || rhs instanceof LppChildValue)
@@ -3252,9 +3255,8 @@
          */
         const actualArgs = []
         // runtime hack by @FurryR.
-        if (this.isMutatorClick(args, thread))
-          return util.thread.stopThisScript()
-        const len = parseInt(args.mutation.length, 10)
+        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+        const len = parseInt(this.getMutation(args, util.thread).length, 10)
         for (let i = 0; i < len; i++) {
           const value = args[`ARG_${i}`]
           if (value instanceof LppValue || value instanceof LppChildValue)
@@ -3299,9 +3301,8 @@
          */
         const actualArgs = []
         // runtime hack by @FurryR.
-        if (this.isMutatorClick(args, thread))
-          return util.thread.stopThisScript()
-        const len = parseInt(args.mutation.length, 10)
+        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+        const len = parseInt(this.getMutation(args, util.thread).length, 10)
         for (let i = 0; i < len; i++) {
           const value = args[`ARG_${i}`]
           if (value instanceof LppValue || value instanceof LppChildValue)
@@ -3332,8 +3333,7 @@
      */
     self(args, util) {
       try {
-        if (this.isMutatorClick(args, util.thread))
-          return util.thread.stopThisScript()
+        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
         if (util.thread.lpp) {
           const unwind = util.thread.lpp.unwind()
           if (unwind) return unwind.self
@@ -3367,10 +3367,9 @@
      */
     constructArray(args, util) {
       try {
-        if (this.isMutatorClick(args, util.thread))
-          return util.thread.stopThisScript()
-        const arr = new LppArray([])
-        const len = parseInt(args.mutation.length, 10)
+        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+        const arr = new LppArray()
+        const len = parseInt(this.getMutation(args, util.thread).length, 10)
         for (let i = 0; i < len; i++) {
           let value = args[`ARG_${i}`]
           if (!(value instanceof LppValue || value instanceof LppChildValue))
@@ -3391,10 +3390,9 @@
      */
     constructObject(args, util) {
       try {
-        if (this.isMutatorClick(args, util.thread))
-          return util.thread.stopThisScript()
+        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
         const obj = new LppObject()
-        const len = parseInt(args.mutation.length, 10)
+        const len = parseInt(this.getMutation(args, util.thread).length, 10)
         for (let i = 0; i < len; i++) {
           let key = args[`KEY_${i}`]
           let value = args[`VALUE_${i}`]
@@ -3428,8 +3426,7 @@
       try {
         this.prepareConstructor(util)
         // runtime hack by @FurryR.
-        if (this.isMutatorClick(args, util.thread))
-          return util.thread.stopThisScript()
+        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
         const block = this.getActiveBlockInstance(args, util.thread)
         /**
          * @type {string[]}
@@ -3480,12 +3477,16 @@
             closure,
             self ?? LppConstant.init(null),
             val => {
-              if (resolveFn) resolveFn(val)
-              else syncResult = val
+              if (!syncResult) {
+                if (resolveFn) resolveFn(val)
+                else syncResult = val
+              }
             },
             val => {
-              if (resolveFn) resolveFn(val)
-              else syncResult = val
+              if (!syncResult) {
+                if (resolveFn) resolveFn(val)
+                else syncResult = val
+              }
             }
           )
           for (const [key, value] of signature.entries()) {
@@ -3523,8 +3524,7 @@
      */
     var(args, util) {
       try {
-        if (this.isMutatorClick(args, util.thread))
-          return util.thread.stopThisScript()
+        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
         if (util.thread.lpp) {
           return util.thread.lpp.get(args.name)
         }
@@ -3541,8 +3541,7 @@
     return(args, util) {
       const { value } = args
       try {
-        if (this.isMutatorClick(args, util.thread))
-          return util.thread.stopThisScript()
+        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
         if (!(value instanceof LppValue || value instanceof LppChildValue))
           throw new LppError('syntaxError')
         const val = ensureValue(value)
@@ -3566,8 +3565,7 @@
     throw(args, util) {
       const { value } = args
       try {
-        if (this.isMutatorClick(args, util.thread))
-          return util.thread.stopThisScript()
+        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
         if (!(value instanceof LppValue || value instanceof LppChildValue))
           throw new LppError('syntaxError')
         const val = ensureValue(value)
@@ -3593,8 +3591,7 @@
      */
     scope(args, util) {
       try {
-        if (this.isMutatorClick(args, util.thread))
-          return util.thread.stopThisScript()
+        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
         this.prepareConstructor(util)
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, util.thread)
@@ -3648,8 +3645,7 @@
      */
     try(args, util) {
       try {
-        if (this.isMutatorClick(args, util.thread))
-          return util.thread.stopThisScript()
+        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
         this.prepareConstructor(util)
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, util.thread)
@@ -3685,14 +3681,13 @@
               throw new Error('Lpp: Not implemented')
             const error = value.value
             if (error.instanceof(GlobalError)) {
-              const traceback = new LppArray()
-              for (const v of value.stack) {
-                if (v instanceof LppBlockTraceback) {
-                  traceback.value.push(LppConstant.init(v.block))
-                } else {
-                  traceback.value.push(LppConstant.init('<Native Function>'))
-                }
-              }
+              const traceback = new LppArray(
+                value.stack.map(v =>
+                  v instanceof LppBlockTraceback
+                    ? LppConstant.init(v.block)
+                    : LppConstant.init('<Native Function>')
+                )
+              )
               error.set('stack', traceback)
             }
             dest.assign(error)
@@ -3747,8 +3742,7 @@
      * @param {any} util Scratch util.
      */
     semi(args, util) {
-      if (this.isMutatorClick(args, util.thread))
-        return util.thread.stopThisScript()
+      if (this.shouldExit(args, util)) return util.thread.stopThisScript()
     }
 
     /**
@@ -3882,30 +3876,28 @@
       }
     }
     /**
-     * Detect mutator clicks.
+     * Detect if the block should exit directly.
      * @param {object} args Block arguments.
-     * @param {any} thread Thread.
+     * @param {any} util Scratch util.
      * @returns {boolean} Whether the block is triggered by clicking on the mutator icon.
      */
-    isMutatorClick(args, thread) {
+    shouldExit(args, util) {
+      this.prepareConstructor(util)
       // const workspace = this.Blockly.getMainWorkspace()
-      let parent = thread.blockContainer._cache._executeCached[
-        thread.peekStack()
+      let parent = util.thread.blockContainer._cache._executeCached[
+        util.thread.peekStack()
       ]?._ops?.find(
         (/** @type {{ _argValues: unknown; }} */ v) => args === v._argValues
       )?.id
-      if (!parent && thread.isCompiled) {
+      if (!parent && util.thread.isCompiled) {
         // patch: In TurboWarp, we can simply use thread.peekStack() to get the block's ID.
-        parent = thread.peekStack()
+        parent = util.thread.peekStack()
       }
-      // if (parent && parent.isMutatorClick) {
-      //   parent.isMutatorClick = false
-      //   return true
-      // }
       if (this.mutatorClick) {
-        if (parent === thread.topBlock) this.mutatorClick = false
-        if (thread.stackClick) return true
+        if (parent === util.thread.topBlock) this.mutatorClick = false
+        if (util.thread.stackClick) return true
       }
+      if (util.thread.status === this.threadConstructor.STATUS_DONE) return true
       return false
     }
     /**
@@ -3932,6 +3924,15 @@
         throw new Error('Lpp: Cannot get active block')
       }
       return block
+    }
+    /**
+     * Get mutation of dedicated block.
+     * @param {object} args Block arguments.
+     * @param {any} thread Thread.
+     * @returns {any} mutation object.
+     */
+    getMutation(args, thread) {
+      return args.mutation ?? this.getActiveBlockInstance(args, thread).mutation
     }
   }
   if (Scratch.vm) {
