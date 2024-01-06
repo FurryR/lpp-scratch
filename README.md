@@ -17,7 +17,7 @@
 
 🌟 lpp adds a new type system to Scratch. By that you can make your own objects or classes.
 
-![OOP in Scratch](doc/image/readme-oop.png)
+![OOP in Scratch](doc/image/readme/oop.png)
 
 </td></tr>
 <tr><td>
@@ -26,7 +26,7 @@
 
 💡 lpp allows you to construct JSON directly without using `JSON.parse`.
 
-![JSON](doc/image/readme-json.png)
+![JSON](doc/image/readme/json.png)
 
 </td></tr>
 <tr><td>
@@ -35,7 +35,7 @@
 
 🤖 lpp provides a friendly debugger and traceback system.
 
-![Friendly debugger](doc/image/readme-debugger.png)
+![Friendly debugger](doc/image/readme/debugger.png)
 
 </td></tr>
 <tr><td>
@@ -44,7 +44,7 @@
 
 🌎 lpp exports its APIs to `vm.runtime.lpp` so other extensions could use them to provide extended functionalities.
 
-![Exported APIs](doc/image/readme-export.png)
+![Exported APIs](doc/image/readme/export.png)
 
 </td></tr>
 </table>
@@ -55,7 +55,7 @@
 
 <div align="center">
 
-![Download](doc/image/readme-download.png)
+![Download](doc/image/readme/download.png)
 
 </div>
 
@@ -63,7 +63,7 @@
 
 <div align="center">
 
-![Eureka](doc/image/readme-eureka.png)
+![Eureka](doc/image/readme/eureka.png)
 
 </div>
 
@@ -71,7 +71,7 @@
 
 <div align="center">
 
-![Turbowarp](doc/image/readme-turbowarp.png)
+![Turbowarp](doc/image/readme/turbowarp.png)
 
 </div>
 
@@ -79,7 +79,7 @@
 
 <div align="center">
 
-![My Blocks](doc/image/readme-myblocks.png)
+![My Blocks](doc/image/readme/myblocks.png)
 
 </div>
 
@@ -87,9 +87,37 @@
 
 <div align="center">
 
-![Done](doc/image/readme-done.png)
+![Done](doc/image/readme/done.png)
 
 </div>
+
+## ❤️‍🔥 Documentation
+
+<table>
+<tr><td>
+
+### ❤️‍🔥 Getting started
+
+🚧 This section is still working in progress.
+
+</td></tr>
+<tr><td>
+
+### 🤖 Getting deeper
+
+🚧 This section is still working in progress.
+
+</td></tr>
+<tr><td>
+
+### 🛠️ Advanced documentation
+
+🚧 This section is still working in progress.
+
+- [Builtin definitions](doc/definition/builtin.md)
+
+</td></tr>
+</table>
 
 ---
 
