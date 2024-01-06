@@ -15,7 +15,9 @@
 
 ### 📃 A brand new type system
 
-🌟 lpp adds a new type system to Scratch. By that you can make your own objects or classes. <img width=2000 />
+🌟 lpp adds a new type system to Scratch. By that you can make your own objects or classes.
+
+![OOP in Scratch](doc/image/readme-oop.png) <img width=2000 />
 
 </td></tr>
 <tr><td>
@@ -40,7 +42,6 @@
 
 </td></tr>
 </table>
-
 
 ---
 
