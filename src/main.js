@@ -137,8 +137,8 @@
         'Create a lpp scope and execute the code in it.',
       'lpp.tooltip.statement.try':
         'Try capturing exceptions in specified statements. If an exception is thrown, set the specified reference to error object, then execute exception handling code.',
-      'lpp.tooltip.statement.semi':
-        'Semi. It is used to convert a Scratch reporter into a statement.',
+      'lpp.tooltip.statement.nop':
+        'Does nothing. It is used to convert a Scratch reporter into a statement.',
       // About
       'lpp.about.summary':
         'lpp is a high-level programming language developed by @FurryR.',
@@ -241,7 +241,7 @@
       'lpp.tooltip.statement.scope': '新建 lpp 作用域，并在作用域内执行代码。',
       'lpp.tooltip.statement.try':
         '尝试在指定的语句块中捕获错误。若有错误被抛出，将指定的变量引用赋值为错误对象，然后执行错误处理代码。',
-      'lpp.tooltip.statement.semi': '分号。用于将返回值积木转换为语句。',
+      'lpp.tooltip.statement.nop': '无任何效果。用于将返回值积木转换为语句。',
       // 关于
       'lpp.about.summary': 'lpp 是由 @FurryR 开发的高级程序设计语言。',
       'lpp.about.github': '本项目的 GitHub 仓库',
@@ -269,7 +269,7 @@
      * @param {string} id Error format message ID.
      */
     constructor(id) {
-      super(`Error ${id}`)
+      super(`lpp: Error ${id}`)
       this.id = id
     }
   }
@@ -390,7 +390,7 @@
     delete(key = undefined) {
       const parent = this.parent.deref()
       if (!parent) throw new LppError('assignOfConstant')
-      if (key) return parent.delete(this.name)
+      if (!key) return parent.delete(this.name)
       return this.value.delete(key)
     }
     /**
@@ -524,6 +524,32 @@
     }
   }
   /**
+   * As boolean.
+   * @param {LppValue} value Value.
+   * @returns {boolean} Result.
+   */
+  function asBoolean(value) {
+    if (value instanceof LppConstant) {
+      if (value.value === null) return false
+      switch (typeof value.value) {
+        case 'number':
+          return value.value !== 0
+        case 'boolean':
+          return value.value
+        case 'string':
+          return value.value.length !== 0
+      }
+      return false
+    } else if (value instanceof LppArray) {
+      return value.value.length !== 0
+    } else if (value instanceof LppObject) {
+      return value.value.size !== 0
+    } else if (value instanceof LppFunction) {
+      return true
+    }
+    return false
+  }
+  /**
    * Lookup for a property in prototype.
    * @param {LppObject} proto Object.
    * @param {string} name Property name.
@@ -635,9 +661,16 @@
       return obj
     }
     /**
+     * @private
      * @type {T} The stored value.
      */
-    value
+    _value
+    /**
+     * @returns {T} The stored value.
+     */
+    get value() {
+      return this._value
+    }
     /**
      * Get a value.
      * @param {string} key Value to get.
@@ -670,12 +703,12 @@
         const constructor = ensureValue(this.get('constructor'))
         if (!(constructor instanceof LppFunction))
           throw new Error(
-            'Lpp: Unexpected constructor -- must be a LppFunction instance'
+            'lpp: Unexpected constructor -- must be a LppFunction instance'
           )
         const proto = ensureValue(constructor.get('prototype'))
         if (!(proto instanceof LppObject))
           throw new Error(
-            'Lpp: Unexpected prototype -- must be a LppObject instance'
+            'lpp: Unexpected prototype -- must be a LppObject instance'
           )
         const member = lookupPrototype(proto, key)
         if (member === null) return LppConstant.init(null)
@@ -702,12 +735,12 @@
       const constructor = ensureValue(this.get('constructor'))
       if (!(constructor instanceof LppFunction))
         throw new Error(
-          'Lpp: Unexpected constructor -- must be a LppFunction instance'
+          'lpp: Unexpected constructor -- must be a LppFunction instance'
         )
       const proto = ensureValue(constructor.get('prototype'))
       if (!(proto instanceof LppObject))
         throw new Error(
-          'Lpp: Unexpected prototype -- must be a LppObject instance'
+          'lpp: Unexpected prototype -- must be a LppObject instance'
         )
       return lookupPrototype(proto, key) !== null
     }
@@ -762,10 +795,10 @@
         value !== null
       ) {
         throw new Error(
-          'Lpp: Unexpected construct -- use LppObject or else instead.'
+          'lpp: Unexpected construct -- use LppObject or else instead.'
         )
       }
-      this.value = value
+      this._value = value
     }
   }
   class LppObject extends LppValue {
@@ -791,12 +824,12 @@
         const constructor = ensureValue(this.get('constructor'))
         if (!(constructor instanceof LppFunction))
           throw new Error(
-            'Lpp: Unexpected constructor -- must be a LppFunction instance'
+            'lpp: Unexpected constructor -- must be a LppFunction instance'
           )
         const proto = ensureValue(constructor.get('prototype'))
         if (!(proto instanceof LppObject))
           throw new Error(
-            'Lpp: Unexpected prototype -- must be a LppObject instance'
+            'lpp: Unexpected prototype -- must be a LppObject instance'
           )
         const member = lookupPrototype(proto, key)
         if (member === null)
@@ -824,12 +857,12 @@
       const constructor = ensureValue(this.get('constructor'))
       if (!(constructor instanceof LppFunction))
         throw new Error(
-          'Lpp: Unexpected constructor -- must be a LppFunction instance'
+          'lpp: Unexpected constructor -- must be a LppFunction instance'
         )
       const proto = ensureValue(constructor.get('prototype'))
       if (!(proto instanceof LppObject))
         throw new Error(
-          'Lpp: Unexpected prototype -- must be a LppObject instance'
+          'lpp: Unexpected prototype -- must be a LppObject instance'
         )
       return lookupPrototype(proto, key) !== null
     }
@@ -899,12 +932,12 @@
           const constructor = ensureValue(this.get('constructor'))
           if (!(constructor instanceof LppFunction))
             throw new Error(
-              'Lpp: Unexpected constructor -- must be a LppFunction instance'
+              'lpp: Unexpected constructor -- must be a LppFunction instance'
             )
           const proto = ensureValue(constructor.get('prototype'))
           if (!(proto instanceof LppObject))
             throw new Error(
-              'Lpp: Unexpected prototype -- must be a LppObject instance'
+              'lpp: Unexpected prototype -- must be a LppObject instance'
             )
           const member = lookupPrototype(proto, key)
           if (member === null) throw new LppError('invalidIndex')
@@ -937,12 +970,12 @@
       const constructor = ensureValue(this.get('constructor'))
       if (!(constructor instanceof LppFunction))
         throw new Error(
-          'Lpp: Unexpected constructor -- must be a LppFunction instance'
+          'lpp: Unexpected constructor -- must be a LppFunction instance'
         )
       const proto = ensureValue(constructor.get('prototype'))
       if (!(proto instanceof LppObject))
         throw new Error(
-          'Lpp: Unexpected prototype -- must be a LppObject instance'
+          'lpp: Unexpected prototype -- must be a LppObject instance'
         )
       return lookupPrototype(proto, key) !== null
     }
@@ -975,7 +1008,7 @@
     }
     /**
      * Construct an array object.
-     * @param {LppValue[] | undefined} value Array of values.
+     * @param {(LppValue | undefined)[] | undefined} value Array of values.
      */
     constructor(value = undefined) {
       super('<Lpp Array>')
@@ -1195,19 +1228,19 @@
       } else if (key === 'prototype') {
         const res = this.value.get(key)
         if (res) return res
-        else throw new Error('Lpp: unexpected get -- prototype is null')
+        else throw new Error('lpp: unexpected get -- prototype is null')
       } else {
         const res = this.value.get(key)
         if (res) return new LppChildValue(this, key, res)
         const constructor = ensureValue(this.get('constructor'))
         if (!(constructor instanceof LppFunction))
           throw new Error(
-            'Lpp: Unexpected constructor -- must be a LppFunction instance'
+            'lpp: Unexpected constructor -- must be a LppFunction instance'
           )
         const proto = ensureValue(constructor.get('prototype'))
         if (!(proto instanceof LppObject))
           throw new Error(
-            'Lpp: Unexpected prototype -- must be a LppObject instance'
+            'lpp: Unexpected prototype -- must be a LppObject instance'
           )
         const member = lookupPrototype(proto, key)
         if (member === null)
@@ -1235,12 +1268,12 @@
       const constructor = ensureValue(this.get('constructor'))
       if (!(constructor instanceof LppFunction))
         throw new Error(
-          'Lpp: Unexpected constructor -- must be a LppFunction instance'
+          'lpp: Unexpected constructor -- must be a LppFunction instance'
         )
       const proto = ensureValue(constructor.get('prototype'))
       if (!(proto instanceof LppObject))
         throw new Error(
-          'Lpp: Unexpected prototype -- must be a LppObject instance'
+          'lpp: Unexpected prototype -- must be a LppObject instance'
         )
       return lookupPrototype(proto, key) !== null
     }
@@ -1329,22 +1362,18 @@
           if (v === LppConstant.init(null)) return LppConstant.init(false)
           switch (typeof v.value) {
             case 'string':
-              return v.value !== ''
-                ? LppConstant.init(true)
-                : LppConstant.init(false)
+              return LppConstant.init(v.value !== '')
             case 'number':
-              return v.value !== 0
-                ? LppConstant.init(true)
-                : LppConstant.init(false)
+              return LppConstant.init(v.value !== 0)
             case 'boolean':
-              return v.value ? LppConstant.init(true) : LppConstant.init(false)
+              return LppConstant.init(v.value)
           }
         } else if (v instanceof LppFunction) {
           return LppConstant.init(true)
         } else if (v instanceof LppObject) {
-          return v.value.size !== 0
-            ? LppConstant.init(true)
-            : LppConstant.init(false)
+          return LppConstant.init(v.value.size !== 0)
+        } else if (v instanceof LppArray) {
+          return LppConstant.init(v.value.length !== 0)
         }
         return LppConstant.init(false) // should never happen
       }
@@ -1406,7 +1435,7 @@
               const res = GlobalIllegalInvocationError.construct([])
               if (res instanceof Promise)
                 throw new Error(
-                  'Lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                  'lpp: GlobalIllegalInvocationError constructor should be synchronous'
                 )
               if (res instanceof LppException) return res
               return new LppException(res.value)
@@ -1442,7 +1471,7 @@
               const res = GlobalIllegalInvocationError.construct([])
               if (res instanceof Promise)
                 throw new Error(
-                  'Lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                  'lpp: GlobalIllegalInvocationError constructor should be synchronous'
                 )
               if (res instanceof LppException) return res
               return new LppException(res.value)
@@ -1463,22 +1492,75 @@
       }
       return new LppReturn(convertToObject(args))
     }, new LppObject(new Map()))
-    const GlobalFunction = LppFunction.native((self, args) => {
-      if (args.length < 1)
-        return new LppReturn(
-          new LppFunction(() => {
-            return new LppReturn(LppConstant.init(null))
-          })
-        )
-      if (args[0] instanceof LppFunction) return new LppReturn(args[0])
-      const res = GlobalIllegalInvocationError.construct([])
-      if (res instanceof Promise)
-        throw new Error(
-          'Lpp: GlobalIllegalInvocationError constructor should be synchronous'
-        )
-      if (res instanceof LppException) return res
-      return new LppException(res.value)
-    }, new LppObject(new Map([['prototype', ensureValue(GlobalObject.get('prototype'))]])))
+    const GlobalFunction = LppFunction.native(
+      (self, args) => {
+        if (args.length < 1)
+          return new LppReturn(
+            new LppFunction(() => {
+              return new LppReturn(LppConstant.init(null))
+            })
+          )
+        if (args[0] instanceof LppFunction) return new LppReturn(args[0])
+        const res = GlobalIllegalInvocationError.construct([])
+        if (res instanceof Promise)
+          throw new Error(
+            'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+          )
+        if (res instanceof LppException) return res
+        return new LppException(res.value)
+      },
+      new LppObject(
+        new Map([
+          ['prototype', ensureValue(GlobalObject.get('prototype'))],
+          [
+            'apply',
+            LppFunction.native((self, args) => {
+              if (self instanceof LppFunction) {
+                let selfArg
+                let argArray
+                switch (args.length) {
+                  case 0: {
+                    selfArg = LppConstant.init(null)
+                    argArray = []
+                    break
+                  }
+                  case 1: {
+                    selfArg = args[0]
+                    argArray = []
+                    break
+                  }
+                  default: {
+                    if (!(args[1] instanceof LppArray)) {
+                      const res = GlobalIllegalInvocationError.construct([])
+                      if (res instanceof Promise)
+                        throw new Error(
+                          'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                        )
+                      if (res instanceof LppException) return res
+                      return new LppException(res.value)
+                    }
+                    selfArg = args[0]
+                    argArray = args[1].value.map(
+                      v => v ?? LppConstant.init(null)
+                    )
+                    break
+                  }
+                }
+                return self.apply(selfArg, argArray)
+              } else {
+                const res = GlobalIllegalInvocationError.construct([])
+                if (res instanceof Promise)
+                  throw new Error(
+                    'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                  )
+                if (res instanceof LppException) return res
+                return new LppException(res.value)
+              }
+            })
+          ]
+        ])
+      )
+    )
     const GlobalError = LppFunction.native((self, args) => {
       if (self.instanceof(GlobalError)) {
         self.set('value', args[0] ?? LppConstant.init(null))
@@ -1488,7 +1570,7 @@
         const res = GlobalIllegalInvocationError.construct([])
         if (res instanceof Promise)
           throw new Error(
-            'Lpp: GlobalIllegalInvocationError constructor should be synchronous'
+            'lpp: GlobalIllegalInvocationError constructor should be synchronous'
           )
         if (res instanceof LppException) return res
         return new LppException(res.value)
@@ -1498,14 +1580,14 @@
       if (self.instanceof(GlobalIllegalInvocationError)) {
         const res = GlobalError.apply(self, args)
         if (res instanceof Promise)
-          throw new Error('Lpp: GlobalError constructor should be synchronous')
+          throw new Error('lpp: GlobalError constructor should be synchronous')
         if (res instanceof LppException) return res
         return new LppReturn(LppConstant.init(null))
       } else {
         const res = GlobalIllegalInvocationError.construct([])
         if (res instanceof Promise)
           throw new Error(
-            'Lpp: GlobalIllegalInvocationError constructor should be synchronous'
+            'lpp: GlobalIllegalInvocationError constructor should be synchronous'
           )
         if (res instanceof LppException) return res
         return new LppException(res.value)
@@ -1515,14 +1597,14 @@
       if (self.instanceof(GlobalSyntaxError)) {
         const res = GlobalError.apply(self, args)
         if (res instanceof Promise)
-          throw new Error('Lpp: GlobalError constructor should be synchronous')
+          throw new Error('lpp: GlobalError constructor should be synchronous')
         if (res instanceof LppException) return res
         return new LppReturn(LppConstant.init(null))
       } else {
         const res = GlobalIllegalInvocationError.construct([])
         if (res instanceof Promise)
           throw new Error(
-            'Lpp: GlobalIllegalInvocationError constructor should be synchronous'
+            'lpp: GlobalIllegalInvocationError constructor should be synchronous'
           )
         if (res instanceof LppException) return res
         return new LppException(res.value)
@@ -1620,7 +1702,7 @@
               const res = GlobalIllegalInvocationError.construct([])
               if (res instanceof Promise)
                 throw new Error(
-                  'Lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                  'lpp: GlobalIllegalInvocationError constructor should be synchronous'
                 )
               if (res instanceof LppException) return res
               return new LppException(res.value)
@@ -1652,7 +1734,7 @@
               const res = GlobalIllegalInvocationError.construct([])
               if (res instanceof Promise)
                 throw new Error(
-                  'Lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                  'lpp: GlobalIllegalInvocationError constructor should be synchronous'
                 )
               if (res instanceof LppException) return res
               return new LppException(res.value)
@@ -2589,18 +2671,6 @@
               )
               this.appendValueInput('name')
             }),
-            lpp_get: simpleBlock(function () {
-              this.setCategory('lpp')
-              this.setInputsInline(true)
-              this.setColour(color)
-              this.setOutput('String')
-              this.setOutputShape(Blockly.OUTPUT_SHAPE_SQUARE)
-              this.setTooltip(formatMessage('lpp.tooltip.operator.get'))
-              this.appendValueInput('value')
-              this.appendDummyInput().appendField('[')
-              this.appendValueInput('name')
-              this.appendDummyInput().appendField(']')
-            }),
             lpp_binaryOp: simpleBlock(function () {
               this.jsonInit({
                 type: 'lpp_binaryOp',
@@ -2619,6 +2689,7 @@
                     name: 'op',
                     options: [
                       ['=', '='],
+                      ['.', '.'],
                       ['+', '+'],
                       ['-', '-'],
                       ['*', '*'],
@@ -2634,7 +2705,6 @@
                       ['||', '||'],
                       ['<<', '<<'],
                       ['>>', '>>'],
-                      ['<<<', '<<<'],
                       ['>>>', '>>>'],
                       ['&', '&'],
                       ['|', '|'],
@@ -2677,7 +2747,7 @@
                   },
                   {
                     type: 'input_value',
-                    name: 'obj'
+                    name: 'value'
                   }
                 ],
                 message0: '%1%2',
@@ -2874,17 +2944,16 @@
               this.appendStatementInput('SUBSTACK_2')
               this.setTooltip(formatMessage('lpp.tooltip.statement.try'))
             }),
-            lpp_semi: simpleBlock(function () {
+            lpp_nop: simpleBlock(function () {
               this.setCategory('lpp')
               this.setInputsInline(true)
               this.setColour(color)
               this.setInputsInline(true)
               this.setOutputShape(Blockly.OUTPUT_SHAPE_SQUARE)
-              this.setTooltip(formatMessage('lpp.tooltip.statement.semi'))
+              this.setTooltip(formatMessage('lpp.tooltip.statement.nop'))
               this.setPreviousStatement(true, null)
               this.setNextStatement(true, null)
               this.appendValueInput('value')
-              this.appendDummyInput().appendField(';')
             })
           })
         }
@@ -2988,42 +3057,28 @@
             text: `🔢 ${this.formatMessage('lpp.category.operator')}`
           },
           {
-            opcode: 'get',
-            blockType: 'reporter',
-            text: '[value][name]',
-            arguments: {
-              value: {
-                type: 'any'
-              },
-              name: {
-                type: 'string',
-                defaultValue: 'foo'
-              }
-            }
-          },
-          {
             opcode: 'binaryOp',
             blockType: 'reporter',
             text: '[lhs][op][rhs]',
             arguments: {
-              lhs: { type: 'any' },
+              lhs: { type: 'string' },
               op: {
                 type: 'string',
                 menu: 'dummy'
               },
-              rhs: { type: 'any' }
+              rhs: { type: 'string' }
             }
           },
           {
             opcode: 'unaryOp',
             blockType: 'reporter',
-            text: '[op][obj]',
+            text: '[op][value]',
             arguments: {
               op: {
                 type: 'string',
                 menu: 'dummy'
               },
-              obj: { type: 'any' }
+              value: { type: 'any' }
             }
           },
           {
@@ -3094,7 +3149,7 @@
             }
           },
           {
-            opcode: 'semi',
+            opcode: 'nop',
             blockType: 'command',
             text: '[value]',
             arguments: {
@@ -3118,7 +3173,7 @@
     builtinType({ value }) {
       const instance = global.get(value)
       if (instance) return instance
-      throw new Error('Lpp: Not implemented')
+      throw new Error('lpp: Not implemented')
     }
     /**
      * Same as builtinType.
@@ -3138,13 +3193,12 @@
     }
     /**
      * Get literal value.
-     * @param {{ value: unknown }} args Arguments.
+     * @param {{ value: unknown }} param0 Arguments.
      * @param {any} util Scratch util.
      * @returns {LppConstant | undefined} Constant value.
      */
-    constructLiteral(args, util) {
-      const { value } = args
-      if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+    constructLiteral({ value }, util) {
+      if (this.shouldExit(util)) return util.thread.stopThisScript()
       switch (value) {
         case 'null':
           return LppConstant.init(null)
@@ -3157,45 +3211,168 @@
         case 'Infinity':
           return LppConstant.init(Infinity)
       }
-      throw new Error('Lpp: Unknown literal')
-    }
-    /**
-     * Get member from value.
-     * @param {{ value: unknown, name: unknown }} args Arguments.
-     * @param {any} util Scratch util.
-     * @returns {LppValue | LppChildValue | undefined} Result.
-     */
-    get(args, util) {
-      const { value, name } = args
-      try {
-        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
-        if (value instanceof LppValue || value instanceof LppChildValue) {
-          if (typeof name === 'string' || typeof name === 'number') {
-            return value.get(`${name}`)
-          } else if (name instanceof LppConstant) {
-            return value.get(name.toString())
-          } else if (name instanceof LppChildValue) {
-            if (name.value instanceof LppConstant)
-              return value.get(name.value.toString())
-          }
-          throw new LppError('invalidIndex')
-        }
-        throw new LppError('syntaxError')
-      } catch (e) {
-        this.handleError(e)
-      }
+      throw new Error('lpp: Unknown literal')
     }
     /**
      * Make binary calculations.
-     * @param {{lhs: unknown, op: string | number, rhs: unknown}} args Arguments.
+     * @param {{lhs: unknown, op: string | number, rhs: unknown}} param0 Arguments.
      * @param {any} util Scratch util.
      * @returns {LppValue | LppChildValue | undefined} Result.
      */
-    binaryOp(args, util) {
-      const { lhs, op, rhs } = args
+    binaryOp({ lhs, op, rhs }, util) {
+      /**
+       * Calculate math operations.
+       * @param {LppValue} lhs Left hand side.
+       * @param {string} op Operand.
+       * @param {LppValue} rhs Right hand side.
+       * @returns {any} Result.
+       */
+      function mathOp(lhs, op, rhs) {
+        if (!(lhs instanceof LppConstant && rhs instanceof LppConstant))
+          return NaN
+        const left = typeof lhs.value === 'boolean' ? +lhs.value : lhs.value
+        const right = typeof rhs.value === 'boolean' ? +rhs.value : rhs.value
+        /**
+         * @type {Map<string, (a: any, b: any) => any>}
+         */
+        const math = new Map([
+          ['+', (a, b) => a + b],
+          ['-', (a, b) => a - b],
+          ['*', (a, b) => a * b],
+          ['/', (a, b) => a / b],
+          ['<<', (a, b) => a << b],
+          ['>>', (a, b) => a >> b],
+          ['>>>', (a, b) => a >>> b],
+          ['&', (a, b) => a & b],
+          ['|', (a, b) => a | b],
+          ['^', (a, b) => a ^ b]
+        ])
+        const fn = math.get(op)
+        if (!fn) throw new Error('lpp: Not implemented')
+        return fn(left, right)
+      }
+      /**
+       * Compare if equal.
+       * @param {LppValue} lhs Left hand side.
+       * @param {LppValue} rhs Right hand side.
+       * @returns {boolean} Result.
+       */
+      function equal(lhs, rhs) {
+        lhs =
+          lhs instanceof LppConstant && typeof lhs.value === 'boolean'
+            ? LppConstant.init(+lhs.value)
+            : lhs
+        rhs =
+          rhs instanceof LppConstant && typeof rhs.value === 'boolean'
+            ? LppConstant.init(+rhs.value)
+            : rhs
+        return lhs === rhs ? true : false
+      }
+      /**
+       * Calculate compare operations.
+       * @param {LppValue} lhs Left hand side.
+       * @param {string} op Operand.
+       * @param {LppValue} rhs Right hand side.
+       * @returns {boolean} Result.
+       */
+      function compare(lhs, op, rhs) {
+        /**
+         * Compare values.
+         * @param {(a: any, b: any) => boolean} fn
+         * @param {LppValue} lhs Left hand side.
+         * @param {LppValue} rhs Right hand side.
+         * @returns {boolean} Result.
+         */
+        function compareInternal(fn, lhs, rhs) {
+          if (lhs instanceof LppConstant) {
+            if (rhs instanceof LppConstant) {
+              if (lhs.value === null || rhs.value === null) return false
+              switch (typeof lhs.value) {
+                case 'boolean': {
+                  switch (typeof rhs.value) {
+                    case 'boolean': {
+                      return fn(+lhs.value, +rhs.value)
+                    }
+                    case 'number': {
+                      return fn(+lhs.value, rhs.value)
+                    }
+                    case 'string': {
+                      return fn(+lhs.value, rhs.value.length ? 1 : 0)
+                    }
+                    default:
+                      throw new Error('lpp: Unknown rhs')
+                  }
+                }
+                case 'number': {
+                  switch (typeof rhs.value) {
+                    case 'boolean': {
+                      return fn(lhs.value, +rhs.value)
+                    }
+                    case 'number': {
+                      return fn(lhs.value, rhs.value)
+                    }
+                    case 'string': {
+                      return fn(lhs.value ? 1 : 0, rhs.value.length ? 1 : 0)
+                    }
+                    default:
+                      throw new Error('lpp: Unknown rhs')
+                  }
+                }
+                case 'string': {
+                  switch (typeof rhs.value) {
+                    case 'boolean': {
+                      return fn(lhs.value.length ? 1 : 0, +rhs.value)
+                    }
+                    case 'number': {
+                      return fn(lhs.value.length ? 1 : 0, rhs.value ? 1 : 0)
+                    }
+                    case 'string': {
+                      return fn(lhs.value, rhs.value)
+                    }
+                    default:
+                      throw new Error('lpp: Unknown rhs')
+                  }
+                }
+                default:
+                  throw new Error('lpp: Unknown lhs')
+              }
+            }
+            return compareInternal(fn, lhs, LppConstant.init(asBoolean(rhs)))
+          }
+          return compareInternal(fn, LppConstant.init(asBoolean(lhs)), rhs)
+        }
+        /**
+         * @type {Map<string, (a: any, b: any) => boolean>}
+         */
+        const math = new Map([
+          ['>', (a, b) => a > b],
+          ['<', (a, b) => a < b],
+          ['>=', (a, b) => a >= b],
+          ['<=', (a, b) => a <= b]
+        ])
+        const fn = math.get(op)
+        if (!fn) throw new Error('lpp: Not implemented')
+        return compareInternal(fn, lhs, rhs)
+      }
       try {
-        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
-        if (
+        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (op === '.') {
+          if (lhs instanceof LppValue || lhs instanceof LppChildValue) {
+            if (typeof rhs === 'string' || typeof rhs === 'number') {
+              return lhs.get(`${rhs}`)
+            } else if (
+              rhs instanceof LppValue ||
+              rhs instanceof LppChildValue
+            ) {
+              const n = ensureValue(rhs)
+              if (n instanceof LppConstant && n.value !== null) {
+                return lhs.get(n.toString())
+              }
+            }
+            throw new LppError('invalidIndex')
+          }
+          throw new LppError('syntaxError')
+        } else if (
           (lhs instanceof LppValue || lhs instanceof LppChildValue) &&
           (rhs instanceof LppValue || rhs instanceof LppChildValue)
         ) {
@@ -3205,36 +3382,274 @@
                 throw new LppError('assignOfConstant')
               return lhs.assign(ensureValue(rhs))
             }
-            case '==': {
+            case '+': {
               const left = ensureValue(lhs)
               const right = ensureValue(rhs)
-              return left === right
-                ? LppConstant.init(true)
-                : LppConstant.init(false)
+              if (left instanceof LppConstant) {
+                if (right instanceof LppConstant) {
+                  if (left.value === null || right.value === null)
+                    return LppConstant.init(NaN)
+                  return LppConstant.init(mathOp(left, op, right))
+                }
+              } else if (left instanceof LppArray) {
+                if (right instanceof LppArray) {
+                  return new LppArray(left.value.concat(right.value))
+                }
+              } else if (left instanceof LppObject) {
+                if (right instanceof LppObject) {
+                  if (
+                    left.value.has('constructor') ||
+                    left.value.has('constructor')
+                  ) {
+                    return LppConstant.init(NaN)
+                  }
+                  const ret = new LppObject()
+                  for (const [key, value] of left.value.entries()) {
+                    ret.set(key, value)
+                  }
+                  for (const [key, value] of right.value.entries()) {
+                    ret.set(key, value)
+                  }
+                  return ret
+                }
+              }
+              return LppConstant.init(NaN)
+            }
+            case '*': {
+              const left = ensureValue(lhs)
+              const right = ensureValue(rhs)
+              if (left instanceof LppConstant) {
+                if (right instanceof LppConstant) {
+                  if (left.value === null || right.value === null)
+                    return LppConstant.init(NaN)
+                  // exception: number * string
+                  if (
+                    typeof left.value === 'string' &&
+                    typeof right.value === 'number'
+                  ) {
+                    if (Number.isInteger(right.value))
+                      return LppConstant.init(left.value.repeat(right.value))
+                  } else if (
+                    typeof left.value === 'number' &&
+                    typeof right.value === 'string'
+                  ) {
+                    if (Number.isInteger(left.value))
+                      return LppConstant.init(right.value.repeat(left.value))
+                  }
+                  return LppConstant.init(mathOp(left, op, right))
+                } else if (
+                  right instanceof LppArray &&
+                  (typeof left.value === 'boolean' ||
+                    typeof left.value === 'number')
+                ) {
+                  const time =
+                    typeof left.value === 'boolean' ? +left.value : left.value
+                  if (Number.isInteger(time)) {
+                    const ret = new LppArray()
+                    for (let i = 0; i < time; i++) {
+                      ret.value = ret.value.concat(right.value)
+                    }
+                    return ret
+                  }
+                }
+              } else if (
+                left instanceof LppArray &&
+                right instanceof LppConstant &&
+                (typeof right.value === 'boolean' ||
+                  typeof right.value === 'number')
+              ) {
+                const time =
+                  typeof right.value === 'boolean' ? +right.value : right.value
+                if (Number.isInteger(time)) {
+                  const ret = new LppArray()
+                  for (let i = 0; i < time; i++) {
+                    ret.value = ret.value.concat(left.value)
+                  }
+                  return ret
+                }
+              }
+              return LppConstant.init(NaN)
+            }
+            case '==': {
+              return LppConstant.init(equal(ensureValue(lhs), ensureValue(rhs)))
             }
             case '!=': {
+              return LppConstant.init(
+                !equal(ensureValue(lhs), ensureValue(rhs))
+              )
+            }
+            case '>':
+            case '<':
+            case '>=':
+            case '<=': {
+              return LppConstant.init(
+                compare(ensureValue(lhs), op, ensureValue(rhs))
+              )
+            }
+            case '&&':
+            case '||': {
+              const left = asBoolean(ensureValue(lhs))
+              const right = asBoolean(ensureValue(rhs))
+              return LppConstant.init(
+                op === '&&' ? left && right : left || right
+              )
+            }
+            // (Pure) math operands
+            case '-':
+            case '/':
+            case '%':
+            case '<<':
+            case '>>':
+            case '>>>':
+            case '&':
+            case '|':
+            case '^': {
               const left = ensureValue(lhs)
               const right = ensureValue(rhs)
-              return left !== right
-                ? LppConstant.init(true)
-                : LppConstant.init(false)
+              if (
+                !(
+                  left instanceof LppConstant && right instanceof LppConstant
+                ) ||
+                left.value === null ||
+                right.value === null ||
+                typeof left.value === 'string' ||
+                typeof right.value === 'string'
+              )
+                return LppConstant.init(NaN)
+              return LppConstant.init(mathOp(left, op, right))
             }
             case 'instanceof': {
-              if (rhs instanceof LppFunction) {
-                return lhs.instanceof(rhs)
-                  ? LppConstant.init(true)
-                  : LppConstant.init(false)
-              } else if (rhs instanceof LppChildValue) {
-                if (rhs.value instanceof LppFunction) {
-                  return lhs.instanceof(rhs.value)
-                    ? LppConstant.init(true)
-                    : LppConstant.init(false)
-                } else throw new LppError('notCallable')
-              } else throw new LppError('notCallable')
+              const right = ensureValue(rhs)
+              if (right instanceof LppFunction) {
+                return LppConstant.init(lhs.instanceof(right))
+              }
+              throw new LppError('notCallable')
             }
+            case 'in': {
+              const left = ensureValue(lhs)
+              const right = ensureValue(rhs)
+              if (!(left instanceof LppConstant && left.value !== null))
+                throw new LppError('invalidIndex')
+              return LppConstant.init(right.has(left.toString()))
+            }
+            default:
+              throw new Error('lpp: unknown operand')
           }
         } else {
           throw new LppError('syntaxError')
+        }
+      } catch (e) {
+        this.handleError(e)
+      }
+    }
+    /**
+     * Do unary calculations.
+     * @param {{op: string, value: unknown}} param0 Arguments.
+     * @param {any} util Scratch util.
+     * @returns {Promise<LppValue | undefined> | LppValue | undefined} Result.
+     */
+    unaryOp({ op, value }, util) {
+      /**
+       * ['+', '+'],
+         ['-', '-'],
+         ['!', '!'],
+         ['~', '~'],
+         ['delete', 'delete'],
+         ['await', 'await'],
+         ['yield', 'yield'],
+         ['yield*', 'yield*']
+       */
+      try {
+        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (!(value instanceof LppValue || value instanceof LppChildValue))
+          throw new LppError('syntaxError')
+        switch (op) {
+          case '+': {
+            const v = ensureValue(value)
+            if (
+              !(
+                v instanceof LppConstant &&
+                (typeof v.value === 'boolean' || typeof v.value === 'number')
+              )
+            )
+              return LppConstant.init(NaN)
+            return LppConstant.init(+v.value)
+          }
+          case '-': {
+            const v = ensureValue(value)
+            if (
+              !(
+                v instanceof LppConstant &&
+                (typeof v.value === 'boolean' || typeof v.value === 'number')
+              )
+            )
+              return LppConstant.init(NaN)
+            return LppConstant.init(-v.value)
+          }
+          case '!': {
+            const v = ensureValue(value)
+            return LppConstant.init(!asBoolean(v))
+          }
+          case '~': {
+            const v = ensureValue(value)
+            if (
+              !(
+                v instanceof LppConstant &&
+                (typeof v.value === 'boolean' || typeof v.value === 'number')
+              )
+            )
+              return LppConstant.init(NaN)
+            return LppConstant.init(~v.value)
+          }
+          case 'delete': {
+            if (!(value instanceof LppChildValue))
+              throw new LppError('assignOfConstant')
+            return LppConstant.init(value.delete())
+          }
+          // case 'await': {
+          //   const v = ensureValue(value)
+          //   const then = v.get('then')
+          //   const error = v.get('catch')
+          //   const thread = util.thread
+          //   /** @type {LppFunction} */
+          //   let thenFn
+          //   /** @type {LppFunction?} */
+          //   let catchFn
+          //   /** @type {LppValue} */
+          //   let thenSelf
+          //   /** @type {LppValue} */
+          //   let catchSelf
+          //   if (then instanceof LppChildValue) {
+          //     if (!(then.value instanceof LppFunction)) return v
+          //     thenFn = then.value
+          //     thenSelf = then.parent.deref() ?? LppConstant.init(null)
+          //   } else {
+          //     if (!(then instanceof LppFunction)) return v
+          //     thenFn = then
+          //     thenSelf = LppConstant.init(null)
+          //   }
+          //   if (error instanceof LppChildValue) {
+          //     if (error.value instanceof LppFunction) {
+          //     catchFn = error.value
+          //     catchSelf = error.parent.deref() ?? LppConstant.init(null)
+          //     }
+          //   } else {
+          //     if (error instanceof LppFunction) {
+          //       catchFn = error
+          //       catchSelf = LppConstant.init(null)
+          //     }
+          //   }
+          //   function registerThenCallback() {
+
+          //   }
+          //   /** @type {((val: LppValue) => void)?} */
+          //   let resolveFn = null
+          //   /** @type {LppValue?} */
+          //   let syncResult = null
+          //   fn.apply(self, [new LppFunction()])
+          // }
+          default:
+            throw new Error('lpp: unknown operand')
         }
       } catch (e) {
         this.handleError(e)
@@ -3255,7 +3670,7 @@
          */
         const actualArgs = []
         // runtime hack by @FurryR.
-        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) return util.thread.stopThisScript()
         const len = parseInt(this.getMutation(args, util.thread).length, 10)
         for (let i = 0; i < len; i++) {
           const value = args[`ARG_${i}`]
@@ -3301,7 +3716,7 @@
          */
         const actualArgs = []
         // runtime hack by @FurryR.
-        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) return util.thread.stopThisScript()
         const len = parseInt(this.getMutation(args, util.thread).length, 10)
         for (let i = 0; i < len; i++) {
           const value = args[`ARG_${i}`]
@@ -3333,7 +3748,7 @@
      */
     self(args, util) {
       try {
-        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) return util.thread.stopThisScript()
         if (util.thread.lpp) {
           const unwind = util.thread.lpp.unwind()
           if (unwind) return unwind.self
@@ -3367,7 +3782,7 @@
      */
     constructArray(args, util) {
       try {
-        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) return util.thread.stopThisScript()
         const arr = new LppArray()
         const len = parseInt(this.getMutation(args, util.thread).length, 10)
         for (let i = 0; i < len; i++) {
@@ -3390,7 +3805,7 @@
      */
     constructObject(args, util) {
       try {
-        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) return util.thread.stopThisScript()
         const obj = new LppObject()
         const len = parseInt(this.getMutation(args, util.thread).length, 10)
         for (let i = 0; i < len; i++) {
@@ -3426,7 +3841,7 @@
       try {
         this.prepareConstructor(util)
         // runtime hack by @FurryR.
-        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) return util.thread.stopThisScript()
         const block = this.getActiveBlockInstance(args, util.thread)
         /**
          * @type {string[]}
@@ -3524,7 +3939,7 @@
      */
     var(args, util) {
       try {
-        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) return util.thread.stopThisScript()
         if (util.thread.lpp) {
           return util.thread.lpp.get(args.name)
         }
@@ -3535,13 +3950,12 @@
     }
     /**
      * Return a value from the function.
-     * @param {{value: unknown}} args Return value.
+     * @param {{value: unknown}} param0 Return value.
      * @param {any} util Scratch util.
      */
-    return(args, util) {
-      const { value } = args
+    return({ value }, util) {
       try {
-        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) return util.thread.stopThisScript()
         if (!(value instanceof LppValue || value instanceof LppChildValue))
           throw new LppError('syntaxError')
         const val = ensureValue(value)
@@ -3559,13 +3973,12 @@
     }
     /**
      * Throw a value from the function.
-     * @param {{value: unknown}} args Exception.
+     * @param {{value: unknown}} param0 Exception.
      * @param {any} util Scratch util.
      */
-    throw(args, util) {
-      const { value } = args
+    throw({ value }, util) {
       try {
-        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) return util.thread.stopThisScript()
         if (!(value instanceof LppValue || value instanceof LppChildValue))
           throw new LppError('syntaxError')
         const val = ensureValue(value)
@@ -3591,7 +4004,7 @@
      */
     scope(args, util) {
       try {
-        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) return util.thread.stopThisScript()
         this.prepareConstructor(util)
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, util.thread)
@@ -3645,7 +4058,7 @@
      */
     try(args, util) {
       try {
-        if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) return util.thread.stopThisScript()
         this.prepareConstructor(util)
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, util.thread)
@@ -3678,7 +4091,7 @@
             }
             const GlobalError = global.get('Error')
             if (!(GlobalError instanceof LppFunction))
-              throw new Error('Lpp: Not implemented')
+              throw new Error('lpp: Not implemented')
             const error = value.value
             if (error.instanceof(GlobalError)) {
               const traceback = new LppArray(
@@ -3738,11 +4151,11 @@
     }
     /**
      * Drops the value of specified expression.
-     * @param {unknown} args Unneccessary argument.
+     * @param {unknown} _ Unneccessary argument.
      * @param {any} util Scratch util.
      */
-    semi(args, util) {
-      if (this.shouldExit(args, util)) return util.thread.stopThisScript()
+    nop(_, util) {
+      if (this.shouldExit(util)) return util.thread.stopThisScript()
     }
 
     /**
@@ -3765,7 +4178,7 @@
     handleException(e) {
       this.warnException(e)
       this.runtime.stopAll()
-      throw new Error('Lpp: Uncaught Lpp exception')
+      throw new Error('lpp: Uncaught Lpp exception')
     }
     /**
      * Create a new thread (without compiling).
@@ -3877,24 +4290,13 @@
     }
     /**
      * Detect if the block should exit directly.
-     * @param {object} args Block arguments.
      * @param {any} util Scratch util.
      * @returns {boolean} Whether the block is triggered by clicking on the mutator icon.
      */
-    shouldExit(args, util) {
+    shouldExit(util) {
       this.prepareConstructor(util)
-      // const workspace = this.Blockly.getMainWorkspace()
-      let parent = util.thread.blockContainer._cache._executeCached[
-        util.thread.peekStack()
-      ]?._ops?.find(
-        (/** @type {{ _argValues: unknown; }} */ v) => args === v._argValues
-      )?.id
-      if (!parent && util.thread.isCompiled) {
-        // patch: In TurboWarp, we can simply use thread.peekStack() to get the block's ID.
-        parent = util.thread.peekStack()
-      }
       if (this.mutatorClick) {
-        if (parent === util.thread.topBlock) this.mutatorClick = false
+        if (util.thread.stack.length === 1) this.mutatorClick = false
         if (util.thread.stackClick) return true
       }
       if (util.thread.status === this.threadConstructor.STATUS_DONE) return true
@@ -3921,7 +4323,7 @@
       }
       if (!block) block = this.runtime.flyoutBlocks.getBlock(thread.peekStack())
       if (!block) {
-        throw new Error('Lpp: Cannot get active block')
+        throw new Error('lpp: Cannot get active block')
       }
       return block
     }
