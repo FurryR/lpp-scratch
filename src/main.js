@@ -14,6 +14,7 @@
  * Nights from CCW
  * FurryR belongs to VeroFess (https://github.com/VeroFess) from GitHub (https://github.com/FurryR)
  * Simon Shiki from GitHub (https://github.com/SimonShiki)
+ * CST1229 from GitHub (https://github.com/CST1229)
  */
 // Polyfill for Non-ES2021 editors
 /**
@@ -1176,6 +1177,105 @@
   /**
    * @typedef {LppReturn | LppException} LppReturnOrException
    */
+  class LppPromise extends LppObject {
+    /**
+     * @type {Promise<LppValue>}
+     */
+    pm
+    /**
+     * @type {(value: LppValue) => void}
+     */
+    resolve
+    /**
+     * @type {(value: LppValue) => void}
+     */
+    reject
+    /**
+     * then() function.
+     * @param {LppFunction} resolveFn
+     * @param {LppFunction | undefined} rejectFn
+     * @returns {LppPromise}
+     */
+    done(resolveFn, rejectFn = undefined) {
+      /**
+       * @param {LppReturnOrException} v
+       * @param {LppPromise} pm
+       */
+      function processApplyValue(v, pm) {
+        if (v instanceof LppReturn) {
+          return pm.resolve(v.value)
+        }
+        throw pm.reject(v.value)
+      }
+      const val = new LppPromise()
+      this.pm.then(
+        value => {
+          if (value instanceof LppValue) {
+            const res = resolveFn.apply(this, [value])
+            if (res instanceof Promise) {
+              return res.then(v => processApplyValue(v, val))
+            }
+            return processApplyValue(res, val)
+          }
+          throw new Error('lpp: unknown result')
+        },
+        rejectFn
+          ? err => {
+              if (err instanceof LppValue) {
+                const res = rejectFn.apply(this, [err])
+                if (res instanceof Promise) {
+                  return res.then(v => processApplyValue(v, val))
+                }
+                return processApplyValue(res, val)
+              }
+              throw err
+            }
+          : undefined
+      )
+      return val
+    }
+    /**
+     * catch() function.
+     * @param {LppFunction} rejectFn
+     * @returns {LppPromise}
+     */
+    error(rejectFn) {
+      /**
+       * @param {LppReturnOrException} v
+       * @param {LppPromise} pm
+       */
+      function processApplyValue(v, pm) {
+        if (v instanceof LppReturn) {
+          return pm.resolve(v.value)
+        }
+        throw pm.reject(v.value)
+      }
+      const val = new LppPromise()
+      this.pm.catch(err => {
+        if (err instanceof LppValue) {
+          const res = rejectFn.apply(this, [err])
+          if (res instanceof Promise) {
+            return res.then(v => processApplyValue(v, val))
+          }
+          return processApplyValue(res, val)
+        }
+        throw err
+      })
+      return val
+    }
+    constructor() {
+      // TODO: unhandledException
+      const GlobalPromise = global.get('Promise')
+      if (!(GlobalPromise instanceof LppFunction)) {
+        throw new Error('lpp: Not implemented')
+      }
+      super(new Map(), GlobalPromise)
+      this.pm = new Promise((resolve, reject) => {
+        this.resolve = resolve
+        this.reject = reject
+      })
+    }
+  }
   class LppFunction extends LppObject {
     /**
      * @type {(self: LppValue, args: LppValue[]) => LppReturnOrException | Promise<LppReturnOrException>} Function to execute.
@@ -1312,7 +1412,10 @@
         this === global.get('Object')
       )
         return this.apply(LppConstant.init(null), args)
-      const obj = new LppObject(new Map(), this)
+      const obj =
+        this === global.get('Promise')
+          ? new LppPromise()
+          : new LppObject(new Map(), this)
       const res = this.apply(obj, args)
       /**
        * Process return value.
@@ -1561,6 +1664,85 @@
         ])
       )
     )
+    const GlobalPromise = LppFunction.native(
+      (self, args) => {
+        if (
+          self instanceof LppPromise &&
+          args.length > 0 &&
+          args[0] instanceof LppFunction
+        ) {
+          const fn = args[0]
+          return fn.apply(self, [
+            new LppFunction((_, args) => {
+              self.resolve(args[0] ?? LppConstant.init(null))
+              return new LppReturn(LppConstant.init(null))
+            }),
+            new LppFunction((_, args) => {
+              self.reject(args[0] ?? LppConstant.init(null))
+              return new LppReturn(LppConstant.init(null))
+            })
+          ])
+        } else {
+          const res = GlobalIllegalInvocationError.construct([])
+          if (res instanceof Promise)
+            throw new Error(
+              'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+            )
+          if (res instanceof LppException) return res
+          return new LppException(res.value)
+        }
+      },
+      new LppObject(
+        new Map([
+          [
+            'then',
+            LppFunction.native((self, args) => {
+              // TODO: deal with Promise resolution
+              if (
+                self instanceof LppPromise &&
+                args.length > 0 &&
+                args[0] instanceof LppFunction
+              ) {
+                return new LppReturn(
+                  self.done(
+                    args[0],
+                    args[1] instanceof LppFunction ? args[1] : undefined
+                  )
+                )
+              } else {
+                const res = GlobalIllegalInvocationError.construct([])
+                if (res instanceof Promise)
+                  throw new Error(
+                    'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                  )
+                if (res instanceof LppException) return res
+                return new LppException(res.value)
+              }
+            })
+          ],
+          [
+            'catch',
+            LppFunction.native((self, args) => {
+              if (
+                self instanceof LppPromise &&
+                args.length > 0 &&
+                args[0] instanceof LppFunction
+              ) {
+                return new LppReturn(self.error(args[0]))
+              } else {
+                const res = GlobalIllegalInvocationError.construct([])
+                if (res instanceof Promise)
+                  throw new Error(
+                    'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                  )
+                if (res instanceof LppException) return res
+                return new LppException(res.value)
+              }
+            })
+          ]
+        ])
+      )
+    )
     const GlobalError = LppFunction.native((self, args) => {
       if (self.instanceof(GlobalError)) {
         self.set('value', args[0] ?? LppConstant.init(null))
@@ -1766,6 +1948,7 @@
     global.set('Array', GlobalArray)
     global.set('Object', GlobalObject)
     global.set('Function', GlobalFunction)
+    global.set('Promise', GlobalPromise)
     // Error
     global.set('Error', GlobalError)
     global.set('IllegalInvocationError', GlobalIllegalInvocationError)
@@ -1932,6 +2115,7 @@
         '🤔 @SimonShiki https://github.com/SimonShiki - Test, Technical support'
       )
       console.log('😄 @Nights https://github.com/Nightre - Technical support')
+      console.log('🔤 @CST1229 https://github.com/CST1229 - Technical support')
       console.log(
         '🐺 @VeroFess https://github.com/VeroFess - Technical support'
       )
@@ -2310,6 +2494,28 @@
             return res
           }
           /**
+           * Clean unused argument from vm.
+           * @author CST1229
+           */
+          function cleanInputs() {
+            const target = self.vm.editingTarget
+            if (!target) return
+            const vmBlock = target.blocks.getBlock(this.id)
+            if (!vmBlock) return
+
+            const usedInputs = new Set(this.inputList.map(i => i?.name))
+
+            const inputs = vmBlock.inputs
+            for (const name of Object.keys(inputs)) {
+              const input = inputs[name]
+              if (!usedInputs.has(name)) {
+                target.blocks.deleteBlock(input.block)
+                target.blocks.deleteBlock(input.shadow)
+                delete inputs[name]
+              }
+            }
+          }
+          /**
            * Append the shadow to the field.
            * @param {any} field Blockly field.
            * @param {string | undefined} defaultValue default value.
@@ -2519,10 +2725,12 @@
                   if (this.length != 0) this.removeInput(`COMMA_${this.length}`)
                   else this.setMutatorMinus()
                   this.removeInput(`ARG_${this.length}`)
+                  this.cleanInputs()
                   this.initSvg()
                   this.render(false)
                 }
-              }
+              },
+              cleanInputs
             }),
             lpp_constructObject: advancedBlock({
               init: function () {
@@ -2591,10 +2799,12 @@
                   this.removeInput(`KEY_${this.length}`)
                   this.removeInput(`COLON_${this.length}`)
                   this.removeInput(`VALUE_${this.length}`)
+                  this.cleanInputs()
                   this.initSvg()
                   this.render(false)
                 }
-              }
+              },
+              cleanInputs
             }),
             lpp_constructFunction: advancedBlock({
               init: function () {
@@ -2653,10 +2863,12 @@
                   if (this.length != 0) this.removeInput(`COMMA_${this.length}`)
                   else this.setMutatorMinus()
                   this.removeInput(`ARG_${this.length}`)
+                  this.cleanInputs()
                   this.initSvg()
                   this.render(false)
                 }
-              }
+              },
+              cleanInputs
             }),
             // Operators
             lpp_var: simpleBlock(function () {
@@ -2822,10 +3034,12 @@
                   if (this.length != 0) this.removeInput(`COMMA_${this.length}`)
                   else this.setMutatorMinus()
                   this.removeInput(`ARG_${this.length}`)
+                  this.cleanInputs()
                   this.initSvg()
                   this.render(false)
                 }
-              }
+              },
+              cleanInputs
             }),
             lpp_new: advancedBlock({
               init: function () {
@@ -2883,10 +3097,12 @@
                   if (this.length != 0) this.removeInput(`COMMA_${this.length}`)
                   else this.setMutatorMinus()
                   this.removeInput(`ARG_${this.length}`)
+                  this.cleanInputs()
                   this.initSvg()
                   this.render(false)
                 }
-              }
+              },
+              cleanInputs
             }),
             // Statements
             lpp_return: simpleBlock(function () {
@@ -3198,7 +3414,13 @@
      * @returns {LppConstant | undefined} Constant value.
      */
     constructLiteral({ value }, util) {
-      if (this.shouldExit(util)) return util.thread.stopThisScript()
+      if (this.shouldExit(util)) {
+        try {
+          return util.thread.stopThisScript()
+        } catch (_) {
+          return
+        }
+      }
       switch (value) {
         case 'null':
           return LppConstant.init(null)
@@ -3355,7 +3577,13 @@
         return compareInternal(fn, lhs, rhs)
       }
       try {
-        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) {
+          try {
+            return util.thread.stopThisScript()
+          } catch (_) {
+            return
+          }
+        }
         if (op === '.') {
           if (lhs instanceof LppValue || lhs instanceof LppChildValue) {
             if (typeof rhs === 'string' || typeof rhs === 'number') {
@@ -3395,8 +3623,14 @@
                 if (right instanceof LppArray) {
                   return new LppArray(left.value.concat(right.value))
                 }
-              } else if (left instanceof LppObject) {
-                if (right instanceof LppObject) {
+              } else if (
+                left instanceof LppObject &&
+                !(left instanceof LppFunction)
+              ) {
+                if (
+                  right instanceof LppObject &&
+                  !(right instanceof LppFunction)
+                ) {
                   if (
                     left.value.has('constructor') ||
                     left.value.has('constructor')
@@ -3560,7 +3794,13 @@
          ['yield*', 'yield*']
        */
       try {
-        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) {
+          try {
+            return util.thread.stopThisScript()
+          } catch (_) {
+            return
+          }
+        }
         if (!(value instanceof LppValue || value instanceof LppChildValue))
           throw new LppError('syntaxError')
         switch (op) {
@@ -3670,7 +3910,13 @@
          */
         const actualArgs = []
         // runtime hack by @FurryR.
-        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) {
+          try {
+            return util.thread.stopThisScript()
+          } catch (_) {
+            return
+          }
+        }
         const len = parseInt(this.getMutation(args, util.thread).length, 10)
         for (let i = 0; i < len; i++) {
           const value = args[`ARG_${i}`]
@@ -3716,7 +3962,13 @@
          */
         const actualArgs = []
         // runtime hack by @FurryR.
-        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) {
+          try {
+            return util.thread.stopThisScript()
+          } catch (_) {
+            return
+          }
+        }
         const len = parseInt(this.getMutation(args, util.thread).length, 10)
         for (let i = 0; i < len; i++) {
           const value = args[`ARG_${i}`]
@@ -3748,7 +4000,13 @@
      */
     self(args, util) {
       try {
-        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) {
+          try {
+            return util.thread.stopThisScript()
+          } catch (_) {
+            return
+          }
+        }
         if (util.thread.lpp) {
           const unwind = util.thread.lpp.unwind()
           if (unwind) return unwind.self
@@ -3782,7 +4040,13 @@
      */
     constructArray(args, util) {
       try {
-        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) {
+          try {
+            return util.thread.stopThisScript()
+          } catch (_) {
+            return
+          }
+        }
         const arr = new LppArray()
         const len = parseInt(this.getMutation(args, util.thread).length, 10)
         for (let i = 0; i < len; i++) {
@@ -3805,7 +4069,13 @@
      */
     constructObject(args, util) {
       try {
-        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) {
+          try {
+            return util.thread.stopThisScript()
+          } catch (_) {
+            return
+          }
+        }
         const obj = new LppObject()
         const len = parseInt(this.getMutation(args, util.thread).length, 10)
         for (let i = 0; i < len; i++) {
@@ -3841,7 +4111,13 @@
       try {
         this.prepareConstructor(util)
         // runtime hack by @FurryR.
-        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) {
+          try {
+            return util.thread.stopThisScript()
+          } catch (_) {
+            return
+          }
+        }
         const block = this.getActiveBlockInstance(args, util.thread)
         /**
          * @type {string[]}
@@ -3939,7 +4215,13 @@
      */
     var(args, util) {
       try {
-        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) {
+          try {
+            return util.thread.stopThisScript()
+          } catch (_) {
+            return
+          }
+        }
         if (util.thread.lpp) {
           return util.thread.lpp.get(args.name)
         }
@@ -3955,7 +4237,13 @@
      */
     return({ value }, util) {
       try {
-        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) {
+          try {
+            return util.thread.stopThisScript()
+          } catch (_) {
+            return
+          }
+        }
         if (!(value instanceof LppValue || value instanceof LppChildValue))
           throw new LppError('syntaxError')
         const val = ensureValue(value)
@@ -3978,7 +4266,13 @@
      */
     throw({ value }, util) {
       try {
-        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) {
+          try {
+            return util.thread.stopThisScript()
+          } catch (_) {
+            return
+          }
+        }
         if (!(value instanceof LppValue || value instanceof LppChildValue))
           throw new LppError('syntaxError')
         const val = ensureValue(value)
@@ -4004,7 +4298,13 @@
      */
     scope(args, util) {
       try {
-        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) {
+          try {
+            return util.thread.stopThisScript()
+          } catch (_) {
+            return
+          }
+        }
         this.prepareConstructor(util)
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, util.thread)
@@ -4058,7 +4358,13 @@
      */
     try(args, util) {
       try {
-        if (this.shouldExit(util)) return util.thread.stopThisScript()
+        if (this.shouldExit(util)) {
+          try {
+            return util.thread.stopThisScript()
+          } catch (_) {
+            return
+          }
+        }
         this.prepareConstructor(util)
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, util.thread)
@@ -4155,7 +4461,13 @@
      * @param {any} util Scratch util.
      */
     nop(_, util) {
-      if (this.shouldExit(util)) return util.thread.stopThisScript()
+      if (this.shouldExit(util)) {
+        try {
+          return util.thread.stopThisScript()
+        } catch (_) {
+          return
+        }
+      }
     }
 
     /**

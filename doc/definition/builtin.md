@@ -7,6 +7,7 @@ There are several builtin classes / methods in lpp.
 - [Builtin](#builtin)
   - [Content](#content)
   - [Function](#function)
+  - [Promise](#promise)
   - [JSON](#json)
 
 ---
@@ -36,6 +37,47 @@ declare class Function {
    * @throws {IllegalInvocationError} If self is not a function.
    */
   apply(self: any, args: Array<any>): any
+}
+```
+
+</td></tr>
+
+<tr><td>
+
+## Promise
+
+`Promise` is a class for asynchronous programming.
+
+Here is the definition of `Promise` class.
+
+```typescript
+declare class Promise {
+  /**
+   * Construct a Promise instance.
+   * @param executor Executor.
+   */
+  constructor(
+    executor: (
+      resolve: (value: any | Promise<any>) => void,
+      reject: (reason: any) => void
+    ) => void
+  )
+  /**
+   * Register then functions.
+   * @param onFulfilled Triggers when the promise is fulfilled.
+   * @param onRejected Triggers when the promise is rejected.
+   * @returns New Promise instance.
+   */
+  then(
+    onFulfilled: (value: any) => any | Promise<any>,
+    onRejected: (reason: any) => any | Promise<any>
+  ): Promise<any>
+  /**
+   * Register exception handlers.
+   * @param onRejected Triggers when the promise is rejected.
+   * @returns New Promise instance.
+   */
+  catch(onRejected: (reason: any) => any): Promise<any>
 }
 ```
 
