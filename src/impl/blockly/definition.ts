@@ -593,55 +593,42 @@ export function defineBlocks(
       this.appendValueInput('name')
     }),
     lpp_binaryOp: simpleBlock(function () {
-      this.jsonInit({
-        type: 'lpp_binaryOp',
-        inputsInline: true,
-        category: 'lpp',
-        colour: color,
-        output: 'String',
-        outputShape: Blockly.OUTPUT_SHAPE_SQUARE,
-        args0: [
-          {
-            type: 'input_value',
-            name: 'lhs'
-          },
-          {
-            type: 'field_dropdown',
-            name: 'op',
-            options: [
-              ['=', '='],
-              ['.', '.'],
-              ['+', '+'],
-              ['-', '-'],
-              ['*', '*'],
-              ['/', '/'],
-              ['%', '%'],
-              ['==', '=='],
-              ['!=', '!='],
-              ['>', '>'],
-              ['<', '<'],
-              ['>=', '>='],
-              ['<=', '<='],
-              ['&&', '&&'],
-              ['||', '||'],
-              ['<<', '<<'],
-              ['>>', '>>'],
-              ['>>>', '>>>'],
-              ['&', '&'],
-              ['|', '|'],
-              ['^', '^'],
-              ['instanceof', 'instanceof'],
-              ['in', 'in']
-            ]
-          },
-          {
-            type: 'input_value',
-            name: 'rhs'
-          }
-        ],
-        message0: '%1%2%3',
-        tooltip: formatMessage('lpp.tooltip.operator.binaryOp')
-      })
+      this.setCategory('lpp')
+      this.setInputsInline(true)
+      this.setColour(color)
+      this.setOutput(true, 'String')
+      this.setOutputShape(Blockly.OUTPUT_SHAPE_SQUARE)
+      this.setTooltip(formatMessage('lpp.tooltip.operator.binaryOp'))
+      this.appendValueInput('lhs')
+      this.appendDummyInput().appendField(
+        new Blockly.FieldDropdown([
+          ['=', '='],
+          ['.', '.'],
+          ['+', '+'],
+          ['-', '-'],
+          ['*', '*'],
+          ['/', '/'],
+          ['%', '%'],
+          ['==', '=='],
+          ['!=', '!='],
+          ['>', '>'],
+          ['<', '<'],
+          ['>=', '>='],
+          ['<=', '<='],
+          ['&&', '&&'],
+          ['||', '||'],
+          ['<<', '<<'],
+          ['>>', '>>'],
+          ['>>>', '>>>'],
+          ['&', '&'],
+          ['|', '|'],
+          ['^', '^'],
+          ['instanceof', 'instanceof'],
+          ['in', 'in']
+        ]) as ScratchBlocks.Field<string>,
+        'op'
+      )
+      this.appendValueInput('rhs')
     }),
     lpp_unaryOp: simpleBlock(function () {
       this.jsonInit({

@@ -1383,14 +1383,12 @@ interface SequencerConstructor {
       if (e instanceof LppError) {
         const thread = this.runtime.sequencer.activeThread
         if (thread) {
-          warnError(
-            this.Blockly,
-            this.formatMessage.bind(this),
-            e.id,
-            thread.peekStack()
-          )
+          const stack = thread.peekStack()
+          if (stack) {
+            warnError(this.Blockly, this.formatMessage.bind(this), e.id, stack)
+            this.runtime.stopAll()
+          }
         }
-        this.runtime.stopAll()
       }
       throw e
     }
