@@ -77,7 +77,6 @@ export function defineBlocks(
         )
       ) {
         const block = this.block_
-        // TODO: finish this thing
         state.mutatorClick = true
         Blockly.Events.setGroup(true)
         const oldExtraState = getExtraBlockState(block)
