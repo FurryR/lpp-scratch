@@ -269,9 +269,9 @@ function lookupPrototype(proto: LppObject, name: string): LppValue | null {
 }
 /**
  * Detect whether prototype1 equals to prototype2 or contains prototype2.
- * @param {LppObject} prototype1 lhs.
- * @param {LppObject} prototype2 rhs.
- * @returns {boolean} Result.
+ * @param prototype1 lhs.
+ * @param prototype2 rhs.
+ * @returns Result.
  */
 function comparePrototype(
   prototype1: LppObject,
@@ -1032,8 +1032,8 @@ export class LppFunction extends LppObject {
   }
   /**
    * Get a value.
-   * @param {string} key Value to get.
-   * @returns {LppValue | LppChildValue} Child object.
+   * @param key Value to get.
+   * @returns Child object.
    */
   get(key: string): LppValue | LppChildValue {
     if (key === 'constructor') {

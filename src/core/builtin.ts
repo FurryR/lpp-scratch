@@ -58,8 +58,8 @@ function deserialize(value: unknown): LppValue {
   const map = new WeakMap<object, LppValue>()
   /**
    * Convert JavaScript object to Lpp object.
-   * @param {any} value Object.
-   * @returns {LppValue} Return value.
+   * @param value Object.
+   * @returns Return value.
    */
   function deserializeInternal(value: unknown): LppValue {
     if (value === null || value === undefined) return LppConstant.init(null)
@@ -196,8 +196,8 @@ export namespace Global {
   export const Object = LppFunction.native((_, args) => {
     /**
      * Convert args to object.
-     * @param {LppValue[]} args Array to convert.
-     * @returns {LppValue} Converted value.
+     * @param args Array to convert.
+     * @returns Converted value.
      */
     function convertToObject(args: LppValue[]): LppValue {
       if (args.length < 1) return new LppObject()
