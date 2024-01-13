@@ -1,6 +1,7 @@
 export { Global, global } from './builtin'
 export {
   LppClosure,
+  LppTraceback,
   LppContext,
   LppException,
   LppFunctionContext,

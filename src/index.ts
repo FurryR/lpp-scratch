@@ -19,18 +19,9 @@
 import { ScratchContext } from './impl/typing/extension'
 import type VM from 'scratch-vm'
 import { locale } from './impl/l10n'
-import { global } from './core/builtin'
-import { LppCompatibleBlockly, defineBlocks } from './impl/blockly/definition'
 import {
-  LppReturn,
-  LppException,
-  LppFunctionContext,
-  LppContext,
-  LppReturnOrException
-} from './core/context'
-import { LppTraceback } from './impl/context'
-import { ensureValue } from './core/helper'
-import {
+  global,
+  ensureValue,
   LppError,
   LppValue,
   LppChildValue,
@@ -38,12 +29,15 @@ import {
   LppArray,
   LppObject,
   LppFunction,
-  LppPromise
-} from './core/type'
-import type {
-  RuntimeEventMap,
-  RuntimeAndVirtualMachineEventMap
-} from 'scratch-vm'
+  LppPromise,
+  LppReturn,
+  LppException,
+  LppFunctionContext,
+  LppContext,
+  LppReturnOrException
+} from './core'
+import { LppCompatibleBlockly, defineBlocks } from './impl/blockly/definition'
+import { LppTraceback } from './impl/context'
 import { warnError, warnException } from './impl/traceback'
 
 declare let Scratch: ScratchContext
@@ -65,7 +59,7 @@ interface LppCompatibleRuntime extends VM.Runtime {
     enabled: boolean
   }
   _events: Record<
-    keyof RuntimeEventMap,
+    keyof VM.RuntimeEventMap,
     ((...args: unknown[]) => unknown) | ((...args: unknown[]) => unknown)[]
   >
 }
@@ -76,7 +70,7 @@ interface LppCompatibleThread extends VM.Thread {
 }
 interface LppCompatibleVM extends VM {
   _events: Record<
-    keyof RuntimeAndVirtualMachineEventMap,
+    keyof VM.RuntimeAndVirtualMachineEventMap,
     ((...args: unknown[]) => unknown) | ((...args: unknown[]) => unknown)[]
   >
 }

@@ -1,4 +1,4 @@
-import { LppContext, LppTraceback as CoreTraceback } from '../core/context'
+import { LppContext, LppTraceback as CoreTraceback } from '../core'
 export namespace LppTraceback {
   export import Base = CoreTraceback.Base
   export import NativeFn = CoreTraceback.NativeFn
