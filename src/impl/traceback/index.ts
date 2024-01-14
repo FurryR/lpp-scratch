@@ -238,9 +238,7 @@ export function warnException(
           )
         }
       } else if (value instanceof LppTraceback.NativeFn) {
-        traceback.title = formatMessage(
-          'lpp.tooltip.button.nativeFn'
-        )
+        traceback.title = formatMessage('lpp.tooltip.button.nativeFn')
       }
       traceback.textContent = value.toString()
       li.append(`📌 ${index} ➡️ `, traceback)
