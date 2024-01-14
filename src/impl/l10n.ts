@@ -111,6 +111,11 @@ export const locale = {
     'lpp.tooltip.button.close': 'Close this hint.',
     'lpp.tooltip.button.help.more': 'Show detail.',
     'lpp.tooltip.button.help.less': 'Hide detail.',
+    'lpp.tooltip.button.scrollToBlockEnabled': 'Scroll to this block.',
+    'lpp.tooltip.button.scrollToBlockDisabled':
+      'Unable to find this block in Blockly workspace.',
+    'lpp.tooltip.button.nativeFn':
+      'This is native function. For further information please check DevTools Console.',
     // About
     'lpp.about.summary':
       'lpp is a high-level programming language developed by @FurryR.',
@@ -163,7 +168,7 @@ export const locale = {
     'lpp.error.recursivePrototype.detail': '请解决循环依赖。',
     'lpp.error.uncaughtException.summary': '有未被捕获的异常。',
     'lpp.error.uncaughtException.detail':
-      '请使用尝试-捕获块对错误进行捕获，否则代码将终止运行。',
+      '请使用尝试/捕获积木对错误进行捕获，否则代码将终止运行。',
     'lpp.error.uncaughtException.exception': '错误内容：',
     'lpp.error.uncaughtException.traceback': '栈回溯：',
     'lpp.error.releaseMode.summary': '代码在运行过程中发生错误。',
@@ -215,6 +220,11 @@ export const locale = {
     'lpp.tooltip.button.close': '关闭这个提示。',
     'lpp.tooltip.button.help.more': '显示详细信息。',
     'lpp.tooltip.button.help.less': '隐藏详细信息。',
+    'lpp.tooltip.button.scrollToBlockEnabled': '转到这个积木。',
+    'lpp.tooltip.button.scrollToBlockDisabled':
+      '无法在 Blockly 工作区中找到此积木。',
+    'lpp.tooltip.button.nativeFn':
+      '这是原生函数。详细内容在 DevTools Console 内。',
     // 关于
     'lpp.about.summary': 'lpp 是由 @FurryR 开发的高级程序设计语言。',
     'lpp.about.github': '本项目的 GitHub 仓库',

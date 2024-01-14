@@ -549,11 +549,11 @@ interface SequencerConstructor {
      */
     constructLiteral(
       { value }: { value: unknown },
-      util: VM.BlockUtility
+      { thread }: VM.BlockUtility
     ): LppConstant | void {
-      if (this.shouldExit(util)) {
+      if (this.shouldExit(thread)) {
         try {
-          return util.thread.stopThisScript()
+          return thread.stopThisScript()
         } catch (_) {
           return
         }
@@ -580,12 +580,12 @@ interface SequencerConstructor {
      */
     binaryOp(
       { lhs, op, rhs }: { lhs: unknown; op: string | number; rhs: unknown },
-      util: VM.BlockUtility
+      { thread }: VM.BlockUtility
     ): LppValue | LppChildValue | void {
       try {
-        if (this.shouldExit(util)) {
+        if (this.shouldExit(thread)) {
           try {
-            return util.thread.stopThisScript()
+            return thread.stopThisScript()
           } catch (_) {
             return
           }
@@ -659,7 +659,7 @@ interface SequencerConstructor {
      */
     unaryOp(
       { op, value }: { op: string; value: unknown },
-      util: VM.BlockUtility
+      { thread }: VM.BlockUtility
     ): Promise<LppValue | undefined> | LppValue | void {
       /**
        * ['+', '+'],
@@ -672,9 +672,9 @@ interface SequencerConstructor {
          ['yield*', 'yield*']
        */
       try {
-        if (this.shouldExit(util)) {
+        if (this.shouldExit(thread)) {
           try {
-            return util.thread.stopThisScript()
+            return thread.stopThisScript()
           } catch (_) {
             return
           }
@@ -749,24 +749,20 @@ interface SequencerConstructor {
         string,
         unknown
       >,
-      util: VM.BlockUtility
+      { thread }: VM.BlockUtility
     ): Promise<void | LppValue> | LppValue | void {
       try {
-        const thread = util.thread
         const { fn } = args
         const actualArgs: LppValue[] = []
         // runtime hack by @FurryR.
-        if (this.shouldExit(util)) {
+        if (this.shouldExit(thread)) {
           try {
-            return util.thread.stopThisScript()
+            return thread.stopThisScript()
           } catch (_) {
             return
           }
         }
-        const len = parseInt(
-          this.getMutation(args, util.thread)?.length ?? '0',
-          10
-        )
+        const len = parseInt(this.getMutation(args, thread)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
           const value = args[`ARG_${i}`]
           if (value instanceof LppValue || value instanceof LppChildValue)
@@ -806,25 +802,21 @@ interface SequencerConstructor {
         string,
         unknown
       >,
-      util: VM.BlockUtility
+      { thread }: VM.BlockUtility
     ): Promise<void | LppValue> | LppValue | void {
       try {
-        const thread = util.thread
         let { fn } = args
         // runtime hack by @FurryR.
         const actualArgs: LppValue[] = []
         // runtime hack by @FurryR.
-        if (this.shouldExit(util)) {
+        if (this.shouldExit(thread)) {
           try {
-            return util.thread.stopThisScript()
+            return thread.stopThisScript()
           } catch (_) {
             return
           }
         }
-        const len = parseInt(
-          this.getMutation(args, util.thread)?.length ?? '0',
-          10
-        )
+        const len = parseInt(this.getMutation(args, thread)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
           const value = args[`ARG_${i}`]
           if (value instanceof LppValue || value instanceof LppChildValue)
@@ -853,18 +845,18 @@ interface SequencerConstructor {
      * @param util Scratch util.
      * @returns Result.
      */
-    self(_args: unknown, util: VM.BlockUtility): LppValue | void {
+    self(_args: unknown, { thread }: VM.BlockUtility): LppValue | void {
       try {
-        if (this.shouldExit(util)) {
+        if (this.shouldExit(thread)) {
           try {
-            return util.thread.stopThisScript()
+            return thread.stopThisScript()
           } catch (_) {
             return
           }
         }
-        const thread = util.thread as LppCompatibleThread
-        if (thread.lpp) {
-          const unwind = thread.lpp.unwind()
+        const lppThread = thread as LppCompatibleThread
+        if (lppThread.lpp) {
+          const unwind = lppThread.lpp.unwind()
           if (unwind) return unwind.self
         }
         throw new LppError('useOutsideFunction')
@@ -904,21 +896,18 @@ interface SequencerConstructor {
      */
     constructArray(
       args: Record<string, unknown>,
-      util: VM.BlockUtility
+      { thread }: VM.BlockUtility
     ): LppArray | void {
       try {
-        if (this.shouldExit(util)) {
+        if (this.shouldExit(thread)) {
           try {
-            return util.thread.stopThisScript()
+            return thread.stopThisScript()
           } catch (_) {
             return
           }
         }
         const arr = new LppArray()
-        const len = parseInt(
-          this.getMutation(args, util.thread)?.length ?? '0',
-          10
-        )
+        const len = parseInt(this.getMutation(args, thread)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
           const value = args[`ARG_${i}`]
           if (!(value instanceof LppValue || value instanceof LppChildValue))
@@ -938,21 +927,18 @@ interface SequencerConstructor {
      */
     constructObject(
       args: Record<string, unknown>,
-      util: VM.BlockUtility
+      { thread }: VM.BlockUtility
     ): LppObject | void {
       try {
-        if (this.shouldExit(util)) {
+        if (this.shouldExit(thread)) {
           try {
-            return util.thread.stopThisScript()
+            return thread.stopThisScript()
           } catch (_) {
             return
           }
         }
         const obj = new LppObject()
-        const len = parseInt(
-          this.getMutation(args, util.thread)?.length ?? '0',
-          10
-        )
+        const len = parseInt(this.getMutation(args, thread)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
           let key = args[`KEY_${i}`]
           const value = args[`VALUE_${i}`]
@@ -983,19 +969,23 @@ interface SequencerConstructor {
      */
     constructFunction(
       args: Record<string, unknown>,
-      util: VM.BlockUtility
+      { thread, target }: VM.BlockUtility
     ): LppFunction | void {
       try {
-        const { Thread, Target, Sequencer } = this.prepareConstructor(util)
+        const { Thread, Target, Sequencer } = {
+          Thread: thread.constructor as ThreadConstructor,
+          Target: target.constructor as TargetConstructor,
+          Sequencer: this.runtime.sequencer.constructor as SequencerConstructor
+        }
         // runtime hack by @FurryR.
-        if (this.shouldExit(util)) {
+        if (this.shouldExit(thread)) {
           try {
-            return util.thread.stopThisScript()
+            return thread.stopThisScript()
           } catch (_) {
             return
           }
         }
-        const block = this.getActiveBlockInstance(args, util.thread)
+        const block = this.getActiveBlockInstance(args, thread)
         const signature: string[] = []
         const len = parseInt(
           (block?.mutation as Record<string, string> | null)?.length ?? '0',
@@ -1007,13 +997,13 @@ interface SequencerConstructor {
           else throw new LppError('syntaxError')
         }
         let context: LppContext | undefined
-        const blocks = util.thread.blockContainer
-        const targetId = util.target.id
-        const thread = util.thread as LppCompatibleThread
-        if (thread.lpp) {
-          context = thread.lpp
+        const blocks = thread.blockContainer
+        const targetId = target.id
+        const lppThread = thread as LppCompatibleThread
+        if (lppThread.lpp) {
+          context = lppThread.lpp
         }
-        return new LppFunction((self, args) => {
+        const fn = new LppFunction((self, args) => {
           let resolveFn: ((v: LppReturnOrException) => void) | undefined
           let syncResult: LppReturnOrException | undefined
           let target = this.runtime.getTargetById(targetId)
@@ -1083,6 +1073,20 @@ interface SequencerConstructor {
             })
           )
         })
+        // TODO: toString method for Scratch blocks, also Function.from(json)
+        // fn.set('toString', LppFunction.native((self, args) => {
+        //   if (self !== fn) {
+        //     const res = Global.IllegalInvocationError.construct([])
+        //     if (res instanceof globalThis.Promise)
+        //       throw new globalThis.Error(
+        //         'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+        //       )
+        //     if (res instanceof LppException) return res
+        //     return new LppException(res.value)
+        //   }
+
+        // }))
+        return fn
       } catch (e) {
         this.handleError(e)
       }
@@ -1093,18 +1097,21 @@ interface SequencerConstructor {
      * @param util Scratch util.
      * @returns The value of the variable. If it is not exist, returns null instead.
      */
-    var(args: { name: string }, util: VM.BlockUtility): LppChildValue | void {
+    var(
+      args: { name: string },
+      { thread }: VM.BlockUtility
+    ): LppChildValue | void {
       try {
-        if (this.shouldExit(util)) {
+        if (this.shouldExit(thread)) {
           try {
-            return util.thread.stopThisScript()
+            return thread.stopThisScript()
           } catch (_) {
             return
           }
         }
-        const thread = util.thread as LppCompatibleThread
-        if (thread.lpp) {
-          return thread.lpp.get(args.name)
+        const lppThread = thread as LppCompatibleThread
+        if (lppThread.lpp) {
+          return lppThread.lpp.get(args.name)
         }
         throw new LppError('useOutsideContext')
       } catch (e) {
@@ -1116,11 +1123,11 @@ interface SequencerConstructor {
      * @param param0 Return value.
      * @param util Scratch util.
      */
-    return({ value }: { value: unknown }, util: VM.BlockUtility) {
+    return({ value }: { value: unknown }, { thread }: VM.BlockUtility) {
       try {
-        if (this.shouldExit(util)) {
+        if (this.shouldExit(thread)) {
           try {
-            return util.thread.stopThisScript()
+            return thread.stopThisScript()
           } catch (_) {
             return
           }
@@ -1128,9 +1135,9 @@ interface SequencerConstructor {
         if (!(value instanceof LppValue || value instanceof LppChildValue))
           throw new LppError('syntaxError')
         const val = ensureValue(value)
-        const thread = util.thread as LppCompatibleThread
-        if (thread.lpp) {
-          const ctx = thread.lpp.unwind()
+        const lppThread = thread as LppCompatibleThread
+        if (lppThread.lpp) {
+          const ctx = lppThread.lpp.unwind()
           if (ctx instanceof LppFunctionContext)
             ctx.returnCallback(new LppReturn(val))
           return thread.stopThisScript()
@@ -1145,11 +1152,11 @@ interface SequencerConstructor {
      * @param param0 Exception.
      * @param util Scratch util.
      */
-    throw({ value }: { value: unknown }, util: VM.BlockUtility) {
+    throw({ value }: { value: unknown }, { thread }: VM.BlockUtility) {
       try {
-        if (this.shouldExit(util)) {
+        if (this.shouldExit(thread)) {
           try {
-            return util.thread.stopThisScript()
+            return thread.stopThisScript()
           } catch (_) {
             return
           }
@@ -1158,12 +1165,12 @@ interface SequencerConstructor {
           throw new LppError('syntaxError')
         const val = ensureValue(value)
         const result = new LppException(val)
-        const thread = util.thread as LppCompatibleThread
+        const lppThread = thread as LppCompatibleThread
         result.pushStack(
-          new LppTraceback.Block(thread.peekStack(), thread.lpp ?? undefined)
+          new LppTraceback.Block(thread.peekStack(), lppThread.lpp ?? undefined)
         )
-        if (thread.lpp) {
-          thread.lpp.exceptionCallback(result)
+        if (lppThread.lpp) {
+          lppThread.lpp.exceptionCallback(result)
           return thread.stopThisScript()
         }
         this.handleException(result)
@@ -1179,59 +1186,61 @@ interface SequencerConstructor {
      */
     scope(
       args: Record<string, unknown>,
-      util: VM.BlockUtility
+      { thread, target }: VM.BlockUtility
     ): Promise<void> | void {
       try {
-        if (this.shouldExit(util)) {
+        if (this.shouldExit(thread)) {
           try {
-            return util.thread.stopThisScript()
+            return thread.stopThisScript()
           } catch (_) {
             return
           }
         }
-        const { Thread, Sequencer } = this.prepareConstructor(util)
+        const { Thread, Sequencer } = {
+          Thread: thread.constructor as ThreadConstructor,
+          Sequencer: this.runtime.sequencer.constructor as SequencerConstructor
+        }
         // runtime hack by @FurryR.
-        const block = this.getActiveBlockInstance(args, util.thread)
+        const block = this.getActiveBlockInstance(args, thread)
         const id = block.inputs.SUBSTACK?.block
         if (!id) return
-        const thread = util.thread as LppCompatibleThread
-        const target = util.target
-        const thread1 = this.createThread(
+        const parentThread = thread as LppCompatibleThread
+        const scopeThread = this.createThread(
           Thread,
           id,
           target
         ) as LppCompatibleThread
         let resolveFn: (() => void) | undefined
         let resolved = false
-        thread1.lpp = new LppContext(
-          thread.lpp ?? undefined,
+        scopeThread.lpp = new LppContext(
+          parentThread.lpp ?? undefined,
           (value) => {
-            if (thread.lpp) {
-              thread.lpp.returnCallback(value)
-              return thread1.stopThisScript()
+            if (parentThread.lpp) {
+              parentThread.lpp.returnCallback(value)
+              return scopeThread.stopThisScript()
             } else throw new LppError('useOutsideFunction')
           },
           (value) => {
             value.pushStack(
               new LppTraceback.Block(
                 thread.peekStack(),
-                thread.lpp ?? undefined
+                parentThread.lpp ?? undefined
               )
             )
-            if (thread.lpp) {
+            if (parentThread.lpp) {
               // interrupt the thread.
-              thread.lpp.exceptionCallback(value)
+              parentThread.lpp.exceptionCallback(value)
               return thread.stopThisScript()
             }
             this.handleException(value)
           }
         )
-        this.bindThread(thread1, () => {
+        this.bindThread(scopeThread, () => {
           if (resolveFn) resolveFn()
           else resolved = true
         })
         const seq = new Sequencer(this.runtime)
-        seq.stepThread(thread1)
+        seq.stepThread(scopeThread)
         if (resolved) return
         return new Promise<void>((resolve) => {
           resolveFn = resolve
@@ -1248,27 +1257,29 @@ interface SequencerConstructor {
      */
     try(
       args: Record<string, unknown>,
-      util: VM.BlockUtility
+      { thread, target }: VM.BlockUtility
     ): Promise<void> | void {
       try {
-        if (this.shouldExit(util)) {
+        if (this.shouldExit(thread)) {
           try {
-            return util.thread.stopThisScript()
+            return thread.stopThisScript()
           } catch (_) {
             return
           }
         }
-        const { Thread, Sequencer } = this.prepareConstructor(util)
+        const { Thread, Sequencer } = {
+          Thread: thread.constructor as ThreadConstructor,
+          Sequencer: this.runtime.sequencer.constructor as SequencerConstructor
+        }
         // runtime hack by @FurryR.
-        const block = this.getActiveBlockInstance(args, util.thread)
+        const block = this.getActiveBlockInstance(args, thread)
         const dest = args.var
         if (!(dest instanceof LppChildValue)) throw new LppError('syntaxError')
         const id = block.inputs.SUBSTACK?.block
         if (!id) return
         const captureId = block.inputs.SUBSTACK_2?.block
-        const thread = util.thread as LppCompatibleThread
-        const target = util.target
-        const thread1 = this.createThread(
+        const parentThread = thread as LppCompatibleThread
+        const tryThread = this.createThread(
           Thread,
           id,
           target
@@ -1276,12 +1287,12 @@ interface SequencerConstructor {
         let triggered = false
         let resolveFn: (() => void) | undefined
         let resolved = false
-        thread1.lpp = new LppContext(
-          thread.lpp ?? undefined,
+        tryThread.lpp = new LppContext(
+          parentThread.lpp ?? undefined,
           (value) => {
-            if (thread.lpp) {
-              thread.lpp.returnCallback(value)
-              return thread1.stopThisScript()
+            if (parentThread.lpp) {
+              parentThread.lpp.returnCallback(value)
+              return tryThread.stopThisScript()
             } else throw new LppError('useOutsideFunction')
           },
           (value) => {
@@ -1302,50 +1313,50 @@ interface SequencerConstructor {
               error.set('stack', traceback)
             }
             dest.assign(error)
-            const thread2 = this.createThread(
+            const catchThread = this.createThread(
               Thread,
               captureId,
               target
             ) as LppCompatibleThread
-            thread2.lpp = new LppContext(
-              thread.lpp ?? undefined,
+            catchThread.lpp = new LppContext(
+              parentThread.lpp ?? undefined,
               (value) => {
-                if (thread.lpp) {
-                  thread.lpp.returnCallback(value)
-                  return thread1.stopThisScript()
+                if (parentThread.lpp) {
+                  parentThread.lpp.returnCallback(value)
+                  return thread.stopThisScript()
                 } else throw new LppError('useOutsideFunction')
               },
               (value) => {
                 value.pushStack(
                   new LppTraceback.Block(
                     thread.peekStack(),
-                    thread.lpp ?? undefined
+                    parentThread.lpp ?? undefined
                   )
                 )
-                if (thread.lpp) {
+                if (parentThread.lpp) {
                   // interrupt the thread.
-                  thread.lpp.exceptionCallback(value)
+                  parentThread.lpp.exceptionCallback(value)
                   return thread.stopThisScript()
                 }
                 this.handleException(value)
               }
             )
-            this.bindThread(thread2, () => {
+            this.bindThread(catchThread, () => {
               if (resolveFn) resolveFn()
               else resolved = true
             })
             const seq = new Sequencer(this.runtime)
-            seq.stepThread(thread2)
+            seq.stepThread(catchThread)
           }
         )
-        this.bindThread(thread1, () => {
+        this.bindThread(tryThread, () => {
           if (!triggered) {
             if (resolveFn) resolveFn()
             else resolved = true
           }
         })
         const seq = new Sequencer(this.runtime)
-        seq.stepThread(thread1)
+        seq.stepThread(tryThread)
         if (resolved) return
         return new Promise((resolve) => {
           resolveFn = resolve
@@ -1359,10 +1370,10 @@ interface SequencerConstructor {
      * @param _ Unneccessary argument.
      * @param util Scratch util.
      */
-    nop(_: unknown, util: VM.BlockUtility) {
-      if (this.shouldExit(util)) {
+    nop(_: unknown, { thread }: VM.BlockUtility) {
+      if (this.shouldExit(thread)) {
         try {
-          return util.thread.stopThisScript()
+          return thread.stopThisScript()
         } catch (_) {
           return
         }
@@ -1498,38 +1509,19 @@ interface SequencerConstructor {
       }
     }
     /**
-     * Prepare constructors for injection.
-     * @param util Scratch util.
-     * @returns Constructors.
-     */
-    prepareConstructor(util: VM.BlockUtility): {
-      Target: TargetConstructor
-      Thread: ThreadConstructor
-      Sequencer: SequencerConstructor
-    } {
-      return {
-        Target: util.target.constructor as TargetConstructor,
-        Thread: util.thread.constructor as ThreadConstructor,
-        Sequencer: util.runtime.sequencer.constructor as SequencerConstructor
-      }
-    }
-    /**
      * Detect if the block should exit directly.
-     * @param util Scratch util.
+     * @param thread Current thread.
      * @returns Whether the block is triggered by clicking on the mutator icon.
      */
-    shouldExit(util: VM.BlockUtility): boolean {
-      const { Thread } = this.prepareConstructor(util)
+    shouldExit(thread: VM.Thread): boolean {
       if (this.mutatorClick) {
-        if (util.thread.stack.length === 1) this.mutatorClick = false
-        if (util.thread.stackClick) return true
+        if (thread.stack.length === 1) this.mutatorClick = false
+        if (thread.stackClick) return true
       }
-      if (util.thread.status === Thread.STATUS_DONE) return true
       return false
     }
     /**
      * Get active block instance of specified thread.
-     * @warning Avoid where possible. Only use it if you need to get substack.
      * @param args Block arguments.
      * @param thread Thread.
      * @returns Block instance.

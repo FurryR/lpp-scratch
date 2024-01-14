@@ -1,8 +1,9 @@
 import type VM from 'scratch-vm'
 import { LppException } from 'src/core'
-import { LppCompatibleBlockly } from './blockly/definition'
+import { LppCompatibleBlockly } from '../blockly/definition'
+import * as Dialog from './dialog'
 import type ScratchBlocks from 'blockly/core'
-import { LppTraceback } from './context'
+import { LppTraceback } from '../context'
 let lastNotification: Notification | undefined
 /**
  * Warn by notification.
@@ -100,78 +101,7 @@ export function showTraceback(svgRoot: SVGAElement) {
     }
   }
 }
-namespace Dialog {
-  export function make(
-    Blockly: LppCompatibleBlockly,
-    id: string,
-    value: (string | Node)[]
-  ): HTMLDivElement | undefined {
-    const workspace = Blockly.getMainWorkspace() as ScratchBlocks.WorkspaceSvg
-    const block = workspace.getBlockById(id) as ScratchBlocks.BlockSvg | null
-    if (!block) return
-    Blockly.DropDownDiv.hideWithoutAnimation()
-    Blockly.DropDownDiv.clearContent()
-    const contentDiv = Blockly.DropDownDiv.getContentDiv(),
-      elem = document.createElement('div')
-    elem.setAttribute('class', 'valueReportBox')
-    elem.style.overflowX = 'hidden'
-    elem.append(...value)
-    elem.style.textAlign = 'left'
-    elem.style.userSelect = 'none'
-    contentDiv.appendChild(elem)
-    Blockly.DropDownDiv.setColour(
-      Blockly.Colours.valueReportBackground,
-      Blockly.Colours.valueReportBorder
-    )
-    Blockly.DropDownDiv.showPositionedByBlock(
-      workspace as unknown as ScratchBlocks.Field<unknown>,
-      block
-    )
-    return elem
-  }
-  export function IconGroup(icons: (string | Node)[]): HTMLDivElement {
-    const iconGroup = document.createElement('div')
-    iconGroup.style.float = 'right'
-    iconGroup.append(...icons)
-    return iconGroup
-  }
-  export function CloseIcon(
-    Blockly: LppCompatibleBlockly,
-    title: string
-  ): HTMLSpanElement {
-    const icon = document.createElement('span')
-    icon.classList.add('lpp-icon')
-    icon.addEventListener('click', () => {
-      Blockly.DropDownDiv.hide()
-    })
-    icon.title = title
-    icon.textContent = '❌'
-    return icon
-  }
-  export function Title(value: string): HTMLDivElement {
-    const text = document.createElement('div')
-    text.style.textAlign = 'left'
-    text.style.whiteSpace = 'nowrap'
-    text.style.overflow = 'hidden'
-    text.textContent = value
-    return text
-  }
-  export function Text(value: string, className?: string): HTMLSpanElement {
-    const text = document.createElement('span')
-    if (className) text.className = className
-    text.textContent = value
-    return text
-  }
-  export function Div(
-    value: (Node | string)[],
-    className?: string
-  ): HTMLDivElement {
-    const div = document.createElement('div')
-    if (className) div.className = className
-    div.append(...value)
-    return div
-  }
-}
+
 /**
  * Warn syntax errors with specified ID.
  * @param Blockly Scratch Blockly instance.
@@ -191,7 +121,7 @@ export function warnError(
       let state = false
       let original = ''
       const icon = document.createElement('span')
-      icon.classList.add('lpp-icon')
+      icon.classList.add('lpp-traceback-icon')
       icon.textContent = '❓'
       icon.title = formatMessage('lpp.tooltip.button.help.more')
       icon.addEventListener('click', () => {
@@ -278,15 +208,48 @@ export function warnException(
 ) {
   function getTraceback(): (Node | string)[] {
     const text: (Node | string)[] = []
+    text.push(
+      `💡 ${formatMessage(`lpp.error.uncaughtException.detail`)}`,
+      document.createElement('br'),
+      document.createElement('br')
+    )
+    text.push(`👾 ${formatMessage('lpp.error.uncaughtException.traceback')}`)
+    const list = document.createElement('ul')
+    list.classList.add('lpp-traceback-list')
     for (const [index, value] of exception.stack.entries()) {
-      text.push(`📌 ${index} -> ${value.toString()}`)
-      if (index < exception.stack.length - 1)
-        text.push(document.createElement('br'))
+      const li = document.createElement('li')
+      const traceback = document.createElement('span')
+      traceback.classList.add('lpp-traceback-stack')
+      if (Blockly && value instanceof LppTraceback.Block) {
+        const workspace =
+          Blockly.getMainWorkspace() as ScratchBlocks.WorkspaceSvg
+        if (workspace.getBlockById(value.block)) {
+          traceback.classList.add('lpp-traceback-stack-enabled')
+          traceback.title = formatMessage(
+            'lpp.tooltip.button.scrollToBlockEnabled'
+          )
+          traceback.addEventListener('click', () => {
+            workspace.centerOnBlock(value.block, true)
+          })
+        } else {
+          traceback.classList.add('lpp-traceback-stack-disabled')
+          traceback.title = formatMessage(
+            'lpp.tooltip.button.scrollToBlockDisabled'
+          )
+        }
+      } else if (value instanceof LppTraceback.NativeFn) {
+        traceback.title = formatMessage(
+          'lpp.tooltip.button.nativeFn'
+        )
+      }
+      traceback.textContent = value.toString()
+      li.append(`📌 ${index} ➡️ `, traceback)
+      list.append(li)
     }
+    text.push(list)
     return text
   }
-  const hasBlockly = Blockly
-  if (hasBlockly) {
+  if (Blockly) {
     let flag = false
     for (const stack of exception.stack.toReversed()) {
       if (
@@ -300,7 +263,7 @@ export function warnException(
           let state = false
           let original = ''
           const icon = document.createElement('span')
-          icon.classList.add('lpp-icon')
+          icon.classList.add('lpp-traceback-icon')
           icon.textContent = '❓'
           icon.title = formatMessage('lpp.tooltip.button.help.more')
           icon.addEventListener('click', () => {
@@ -368,7 +331,7 @@ export function warnException(
   console.groupCollapsed(
     `❌ ${formatMessage('lpp.error.uncaughtException.summary')}`
   )
-  if (hasBlockly)
+  if (Blockly)
     console.log(`💡 ${formatMessage('lpp.error.uncaughtException.detail')}`)
   else console.log(`ℹ️ ${formatMessage('lpp.error.releaseMode.detail')}`)
   console.log(
@@ -379,13 +342,13 @@ export function warnException(
     `👾 ${formatMessage('lpp.error.uncaughtException.traceback')}`
   )
   for (const [idx, value] of exception.stack.entries()) {
-    if (hasBlockly) {
+    if (Blockly) {
       if (value instanceof LppTraceback.Block) {
         const block = Blockly.getMainWorkspace()?.getBlockById(
           value.block
         ) as unknown as { getSvgRoot: () => SVGAElement } | undefined
         const svgRoot = block?.getSvgRoot()
-        console.groupCollapsed(`📌 ${idx + 1} ->`, value.block)
+        console.groupCollapsed(`📌 ${idx + 1} ➡️`, value.block)
         if (svgRoot) {
           showTraceback(svgRoot)
           console.log(svgRoot)
@@ -396,30 +359,41 @@ export function warnException(
           console.log(`🛠️ ${formatMessage('lpp.error.context')}`, value.context)
         console.groupEnd()
       } else if (value instanceof LppTraceback.NativeFn) {
-        console.groupCollapsed(`📌 ${idx + 1} ->`, value.fn)
+        console.groupCollapsed(`📌 ${idx + 1} ➡️`, value.fn)
         console.log(`🛠️ ${formatMessage('lpp.error.self')}`, value.self)
         console.log(`🛠️ ${formatMessage('lpp.error.arguments')}`, value.args)
         console.groupEnd()
       } else {
-        console.log(`📌 ${idx + 1} ->`, value.toString())
+        console.log(`📌 ${idx + 1} ➡️`, value.toString())
       }
     } else {
-      console.log(`📌 ${idx + 1} ->`, value.toString())
+      console.log(`📌 ${idx + 1} ➡️`, value.toString())
     }
   }
   console.groupEnd()
   console.groupEnd()
 }
-const globalStyle = document.createElement('style')
-globalStyle.textContent = `
-.lpp-icon {
-  transition: text-shadow 0.25s ease-out;
-  color: transparent;
-  text-shadow: 0 0 0 gray;
+Dialog.globalStyle.textContent += `
+.lpp-traceback-list {
+  padding: 0;
+  list-style-type: disc;
+  margin-left: 20px;
 }
-.lpp-icon:hover {
+.lpp-traceback-stack {
+  font-family: "Source Code Pro", "Fira Code", "DejaVu Sans Mono", "Cascadia Code", "Jetbrains Mono", "Lucida Console", Consolas, monospace;
+}
+.lpp-traceback-stack-enabled {
+  transition: color 0.25s ease-out;
+}
+.lpp-traceback-stack-disabled {
+  transition: color 0.25s ease-out;
+}
+.lpp-traceback-stack-enabled:hover {
   cursor: pointer;
-  text-shadow: 0 0 0 gray, 0px 0px 5px silver;
+  color: gray;
+}
+.lpp-traceback-stack-disabled:hover {
+  cursor: not-allowed;
+  color: red;
 }
 `
-document.head.appendChild(globalStyle)
