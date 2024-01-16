@@ -8,92 +8,20 @@ import {
   LppValue
 } from './type'
 
-import { asBoolean, ensureValue } from './helper'
+import {
+  asBoolean,
+  serializeObject,
+  ensureValue,
+  deserializeObject
+} from './helper'
 /**
  * Global builtins.
  */
 export const global = new Map<string, LppValue>()
-/**
- * Convert Lpp object to JavaScript object.
- * @param value Object.
- * @returns Return value.
- */
-function serialize(value: LppValue): unknown {
-  const map = new WeakMap<LppValue, object>()
-  /**
-   * Convert Lpp object to JavaScript object.
-   * @param value Object.
-   * @returns Return value.
-   */
-  function serializeInternal(value: LppValue): unknown {
-    if (value instanceof LppConstant) return value.value
-    if (value instanceof LppArray) {
-      const cache = map.get(value)
-      if (cache) return cache
-      const res = value.value.map((v) => (v ? serialize(v) : null))
-      map.set(value, res)
-      return res
-    }
-    if (value instanceof LppObject) {
-      const cache = map.get(value)
-      if (cache) return cache
-      const res: Record<string, unknown> = {}
-      for (const [k, v] of value.value.entries()) {
-        if (k === 'constructor') continue
-        res[k] = serialize(v)
-      }
-      map.set(value, res)
-      return res
-    }
-    return null
-  }
-  return serializeInternal(value)
-}
-/**
- * Convert JavaScript object to Lpp object.
- * @param value Object.
- * @returns Return value.
- */
-function deserialize(value: unknown): LppValue {
-  const map = new WeakMap<object, LppValue>()
-  /**
-   * Convert JavaScript object to Lpp object.
-   * @param value Object.
-   * @returns Return value.
-   */
-  function deserializeInternal(value: unknown): LppValue {
-    if (value === null || value === undefined) return LppConstant.init(null)
-    switch (typeof value) {
-      case 'string':
-      case 'number':
-      case 'boolean':
-        return LppConstant.init(value)
-      case 'object': {
-        const v = map.get(value)
-        if (v) return v
-        if (value instanceof globalThis.Array) {
-          const res = new LppArray(
-            value.map((value) => deserializeInternal(value))
-          )
-          map.set(value, res)
-          return res
-        }
-        const obj = new LppObject()
-        for (const [k, v] of globalThis.Object.entries(value)) {
-          obj.set(k, deserializeInternal(v))
-        }
-        map.set(value, obj)
-        return obj
-      }
-    }
-    return LppConstant.init(null)
-  }
-  return deserializeInternal(value)
-}
 export namespace Global {
   export const Boolean = LppFunction.native((_, args) => {
-    if (args.length < 1) return new LppReturn(LppConstant.init(false))
-    return new LppReturn(LppConstant.init(asBoolean(args[0])))
+    if (args.length < 1) return new LppReturn(new LppConstant(false))
+    return new LppReturn(new LppConstant(asBoolean(args[0])))
   }, new LppObject(new Map()))
   export const Number = LppFunction.native((_, args) => {
     /**
@@ -102,24 +30,24 @@ export namespace Global {
      * @returns Converted value.
      */
     function convertToNumber(args: LppValue[]): LppConstant<number> {
-      if (args.length < 1) return LppConstant.init(0)
+      if (args.length < 1) return new LppConstant(0)
       const v = args[0]
       if (v instanceof LppConstant) {
-        if (v === LppConstant.init(null)) return LppConstant.init(0)
+        if (v === new LppConstant(null)) return new LppConstant(0)
         switch (typeof v.value) {
           case 'string':
-            return LppConstant.init(globalThis.Number(v.value))
+            return new LppConstant(globalThis.Number(v.value))
           case 'number':
-            return LppConstant.init(v.value)
+            return new LppConstant(v.value)
           case 'boolean':
-            return v.value ? LppConstant.init(1) : LppConstant.init(0)
+            return v.value ? new LppConstant(1) : new LppConstant(0)
         }
       } else if (v instanceof LppFunction) {
-        return LppConstant.init(NaN)
+        return new LppConstant(NaN)
       } else if (v instanceof LppObject) {
-        return LppConstant.init(NaN)
+        return new LppConstant(NaN)
       }
-      return LppConstant.init(NaN) // should never happen
+      return new LppConstant(NaN) // should never happen
     }
     return new LppReturn(convertToNumber(args))
   }, new LppObject(new Map()))
@@ -131,9 +59,9 @@ export namespace Global {
        * @returns Converted value.
        */
       function convertToString(args: LppValue[]): LppConstant<string> {
-        if (args.length < 1) return LppConstant.init('')
+        if (args.length < 1) return new LppConstant('')
         const v = args[0]
-        return LppConstant.init(v.toString()) // should never happen
+        return new LppConstant(v.toString()) // should never happen
       }
       return new LppReturn(convertToString(args))
     },
@@ -141,14 +69,14 @@ export namespace Global {
       new Map([
         [
           'length',
-          LppFunction.native((self) => {
+          LppFunction.native(self => {
             if (self instanceof LppConstant && typeof self.value === 'string') {
-              return new LppReturn(LppConstant.init(self.value.length))
+              return new LppReturn(new LppConstant(self.value.length))
             }
             const res = IllegalInvocationError.construct([])
             if (res instanceof globalThis.Promise)
               throw new globalThis.Error(
-                'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                'lpp: IllegalInvocationError constructor should be synchronous'
               )
             if (res instanceof LppException) return res
             return new LppException(res.value)
@@ -177,14 +105,14 @@ export namespace Global {
       new Map([
         [
           'length',
-          LppFunction.native((self) => {
+          LppFunction.native(self => {
             if (self instanceof LppArray) {
-              return new LppReturn(LppConstant.init(self.value.length))
+              return new LppReturn(new LppConstant(self.value.length))
             }
             const res = IllegalInvocationError.construct([])
             if (res instanceof globalThis.Promise)
               throw new globalThis.Error(
-                'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                'lpp: IllegalInvocationError constructor should be synchronous'
               )
             if (res instanceof LppException) return res
             return new LppException(res.value)
@@ -210,14 +138,14 @@ export namespace Global {
       if (args.length < 1)
         return new LppReturn(
           new LppFunction(() => {
-            return new LppReturn(LppConstant.init(null))
+            return new LppReturn(new LppConstant(null))
           })
         )
       if (args[0] instanceof LppFunction) return new LppReturn(args[0])
       const res = IllegalInvocationError.construct([])
       if (res instanceof globalThis.Promise)
         throw new globalThis.Error(
-          'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+          'lpp: IllegalInvocationError constructor should be synchronous'
         )
       if (res instanceof LppException) return res
       return new LppException(res.value)
@@ -229,7 +157,7 @@ export namespace Global {
           'apply',
           LppFunction.native((self, args) => {
             if (self instanceof LppFunction) {
-              let selfArg: LppValue = LppConstant.init(null)
+              let selfArg: LppValue = new LppConstant(null)
               let argArray: LppValue[] = []
               switch (args.length) {
                 case 0: {
@@ -244,15 +172,13 @@ export namespace Global {
                     const res = IllegalInvocationError.construct([])
                     if (res instanceof globalThis.Promise)
                       throw new globalThis.Error(
-                        'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                        'lpp: IllegalInvocationError constructor should be synchronous'
                       )
                     if (res instanceof LppException) return res
                     return new LppException(res.value)
                   }
                   selfArg = args[0]
-                  argArray = args[1].value.map(
-                    (v) => v ?? LppConstant.init(null)
-                  )
+                  argArray = args[1].value.map(v => v ?? new LppConstant(null))
                   break
                 }
               }
@@ -261,7 +187,7 @@ export namespace Global {
               const res = IllegalInvocationError.construct([])
               if (res instanceof globalThis.Promise)
                 throw new globalThis.Error(
-                  'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                  'lpp: IllegalInvocationError constructor should be synchronous'
                 )
               if (res instanceof LppException) return res
               return new LppException(res.value)
@@ -281,19 +207,19 @@ export namespace Global {
         const fn = args[0]
         return fn.apply(self, [
           new LppFunction((_, args) => {
-            self.resolve(args[0] ?? LppConstant.init(null))
-            return new LppReturn(LppConstant.init(null))
+            self.resolve(args[0] ?? new LppConstant(null))
+            return new LppReturn(new LppConstant(null))
           }),
           new LppFunction((_, args) => {
-            self.reject(args[0] ?? LppConstant.init(null))
-            return new LppReturn(LppConstant.init(null))
+            self.reject(args[0] ?? new LppConstant(null))
+            return new LppReturn(new LppConstant(null))
           })
         ])
       } else {
         const res = IllegalInvocationError.construct([])
         if (res instanceof globalThis.Promise)
           throw new globalThis.Error(
-            'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+            'lpp: IllegalInvocationError constructor should be synchronous'
           )
         if (res instanceof LppException) return res
         return new LppException(res.value)
@@ -304,7 +230,7 @@ export namespace Global {
         [
           'then',
           LppFunction.native((self, args) => {
-            // TODO: deal with Promise resolution
+            // TODO: handle Promise (described in standard documentation)
             if (
               self instanceof LppPromise &&
               args.length > 0 &&
@@ -320,7 +246,7 @@ export namespace Global {
               const res = IllegalInvocationError.construct([])
               if (res instanceof globalThis.Promise)
                 throw new globalThis.Error(
-                  'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                  'lpp: IllegalInvocationError constructor should be synchronous'
                 )
               if (res instanceof LppException) return res
               return new LppException(res.value)
@@ -340,7 +266,7 @@ export namespace Global {
               const res = IllegalInvocationError.construct([])
               if (res instanceof globalThis.Promise)
                 throw new globalThis.Error(
-                  'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                  'lpp: IllegalInvocationError constructor should be synchronous'
                 )
               if (res instanceof LppException) return res
               return new LppException(res.value)
@@ -352,14 +278,14 @@ export namespace Global {
   )
   export const Error = LppFunction.native((self, args) => {
     if (self.instanceof(Error)) {
-      self.set('value', args[0] ?? LppConstant.init(null))
-      self.set('stack', LppConstant.init(null))
+      self.set('value', args[0] ?? new LppConstant(null))
+      self.set('stack', new LppConstant(null))
       return new LppReturn(new LppArray())
     } else {
       const res = IllegalInvocationError.construct([])
       if (res instanceof globalThis.Promise)
         throw new globalThis.Error(
-          'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+          'lpp: IllegalInvocationError constructor should be synchronous'
         )
       if (res instanceof LppException) return res
       return new LppException(res.value)
@@ -371,15 +297,15 @@ export namespace Global {
         const res = Error.apply(self, args)
         if (res instanceof globalThis.Promise)
           throw new globalThis.Error(
-            'lpp: GlobalError constructor should be synchronous'
+            'lpp: Error constructor should be synchronous'
           )
         if (res instanceof LppException) return res
-        return new LppReturn(LppConstant.init(null))
+        return new LppReturn(new LppConstant(null))
       } else {
         const res = IllegalInvocationError.construct([])
         if (res instanceof globalThis.Promise)
           throw new globalThis.Error(
-            'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+            'lpp: IllegalInvocationError constructor should be synchronous'
           )
         if (res instanceof LppException) return res
         return new LppException(res.value)
@@ -393,15 +319,15 @@ export namespace Global {
         const res = Error.apply(self, args)
         if (res instanceof globalThis.Promise)
           throw new globalThis.Error(
-            'lpp: GlobalError constructor should be synchronous'
+            'lpp: Error constructor should be synchronous'
           )
         if (res instanceof LppException) return res
-        return new LppReturn(LppConstant.init(null))
+        return new LppReturn(new LppConstant(null))
       } else {
         const res = IllegalInvocationError.construct([])
         if (res instanceof globalThis.Promise)
           throw new globalThis.Error(
-            'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+            'lpp: IllegalInvocationError constructor should be synchronous'
           )
         if (res instanceof LppException) return res
         return new LppException(res.value)
@@ -418,7 +344,7 @@ export namespace Global {
             const res = IllegalInvocationError.construct([])
             if (res instanceof globalThis.Promise)
               throw new globalThis.Error(
-                'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                'lpp: IllegalInvocationError constructor should be synchronous'
               )
             if (res instanceof LppException) return res
             return new LppException(res.value)
@@ -428,15 +354,27 @@ export namespace Global {
             !(args[0] instanceof LppConstant) ||
             !(typeof args[0].value === 'string')
           ) {
-            return SyntaxError.construct([LppConstant.init('Invalid JSON')])
+            const res = SyntaxError.construct([new LppConstant('Invalid JSON')])
+            if (res instanceof globalThis.Promise)
+              throw new globalThis.Error(
+                'lpp: SyntaxError constructor should be synchronous'
+              )
+            if (res instanceof LppException) return res
+            return new LppException(res.value)
           }
           try {
             return new LppReturn(
-              deserialize(globalThis.JSON.parse(args[0].value))
+              serializeObject(globalThis.JSON.parse(args[0].value))
             )
           } catch (e) {
             if (e instanceof globalThis.Error) {
-              return SyntaxError.construct([LppConstant.init(e.message)])
+              const res = SyntaxError.construct([new LppConstant(e.message)])
+              if (res instanceof globalThis.Promise)
+                throw new globalThis.Error(
+                  'lpp: SyntaxError constructor should be synchronous'
+                )
+              if (res instanceof LppException) return res
+              return new LppException(res.value)
             } else throw e
           }
         })
@@ -448,21 +386,37 @@ export namespace Global {
             const res = IllegalInvocationError.construct([])
             if (res instanceof globalThis.Promise)
               throw new globalThis.Error(
-                'lpp: GlobalIllegalInvocationError constructor should be synchronous'
+                'lpp: IllegalInvocationError constructor should be synchronous'
               )
             if (res instanceof LppException) return res
             return new LppException(res.value)
           }
           if (args.length < 1) {
-            return SyntaxError.construct([LppConstant.init('Invalid value')])
+            const res = SyntaxError.construct([
+              new LppConstant('Invalid value')
+            ])
+            if (res instanceof globalThis.Promise)
+              throw new globalThis.Error(
+                'lpp: SyntaxError constructor should be synchronous'
+              )
+            if (res instanceof LppException) return res
+            return new LppException(res.value)
           }
           try {
             return new LppReturn(
-              LppConstant.init(globalThis.JSON.stringify(serialize(args[0])))
+              new LppConstant(
+                globalThis.JSON.stringify(deserializeObject(args[0]))
+              )
             )
           } catch (e) {
             if (e instanceof globalThis.Error) {
-              return SyntaxError.construct([LppConstant.init(e.message)])
+              const res = SyntaxError.construct([new LppConstant(e.message)])
+              if (res instanceof globalThis.Promise)
+                throw new globalThis.Error(
+                  'lpp: SyntaxError constructor should be synchronous'
+                )
+              if (res instanceof LppException) return res
+              return new LppException(res.value)
             } else throw e
           }
         })

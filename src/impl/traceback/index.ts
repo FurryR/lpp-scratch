@@ -20,7 +20,7 @@ function notificationAlert({
   tag: string
   silent: boolean
 }) {
-  Notification.requestPermission().then((value) => {
+  Notification.requestPermission().then(value => {
     if (value === 'granted') {
       if (lastNotification) {
         lastNotification.close()

@@ -1,9 +1,12 @@
 /**
+ * --- CAUTION ---
  * Warning! lpp does not support sandboxed mode. Please load it as unsandboxed extension.
- * 注意！lpp 不支持隔离模式，请将其作为非隔离插件加载。
+ * 注意！lpp 不支持隔离模式，请将其作为非隔离扩展加载。
+ * 注意！lpp 不支援隔離模式，請將其作爲非隔離擴張程式載入。
  * 注意！lpp はサンドボックスモードをサポートされていません。非サンドボックス拡張機能でロードしてください。
  * ちゅうい！lpp はサンドボックスモードをサポートされていません。ひサンドボックスかくちょうきのうでロードしてください。
  */
+// TODO: Move copyright information to tsup.config.ts
 /**
  * Copyright (c) 2023 凌.
  * This program is licensed under the MIT license.
@@ -16,7 +19,17 @@
  * CST1229 from GitHub (https://github.com/CST1229)
  */
 
-import { ScratchContext } from './impl/typing/extension'
+import {
+  BlocksConstructor,
+  LppCompatibleBlocks,
+  LppCompatibleRuntime,
+  LppCompatibleThread,
+  LppCompatibleVM,
+  ScratchContext,
+  SequencerConstructor,
+  TargetConstructor,
+  ThreadConstructor
+} from './impl/typing'
 import type VM from 'scratch-vm'
 import { locale } from './impl/l10n'
 import {
@@ -24,7 +37,7 @@ import {
   ensureValue,
   LppError,
   LppValue,
-  LppChildValue,
+  LppReference,
   LppConstant,
   LppArray,
   LppObject,
@@ -34,66 +47,23 @@ import {
   LppException,
   LppFunctionContext,
   LppContext,
-  LppReturnOrException
+  LppReturnOrException,
+  Global,
+  serializeObject,
+  deserializeObject
 } from './core'
 import { LppCompatibleBlockly, defineBlocks } from './impl/blockly/definition'
 import { LppTraceback } from './impl/context'
 import { warnError, warnException } from './impl/traceback'
+import {
+  SerializationInfo,
+  Validator,
+  deserializeBlock,
+  serializeBlock
+} from './impl/serialization'
+import { Wrapper } from './impl/wrapper'
 
 declare let Scratch: ScratchContext
-interface LppCompatibleRuntime extends VM.Runtime {
-  lpp?: {
-    LppValue: typeof LppValue
-    LppChildValue: typeof LppChildValue
-    LppConstant: typeof LppConstant
-    LppArray: typeof LppArray
-    LppObject: typeof LppObject
-    LppFunction: typeof LppFunction
-    LppPromise: typeof LppPromise
-    LppReturn: typeof LppReturn
-    LppException: typeof LppException
-    version: string
-    global: typeof global
-  }
-  compilerOptions?: {
-    enabled: boolean
-  }
-  _events: Record<
-    keyof VM.RuntimeEventMap,
-    ((...args: unknown[]) => unknown) | ((...args: unknown[]) => unknown)[]
-  >
-}
-interface LppCompatibleThread extends VM.Thread {
-  lpp?: LppContext
-  isCompiled?: boolean
-  tryCompile?(): void
-}
-interface LppCompatibleVM extends VM {
-  _events: Record<
-    keyof VM.RuntimeAndVirtualMachineEventMap,
-    ((...args: unknown[]) => unknown) | ((...args: unknown[]) => unknown)[]
-  >
-}
-interface LppCompatibleBlocks extends VM.Blocks {
-  getNextBlock(id: string): string | null
-  _cache: {
-    _executeCached: Record<
-      string,
-      { _ops: { _argValues: object; id: string }[] }
-    >
-  }
-}
-interface TargetConstructor {
-  new ({ blocks }: { blocks: VM.Blocks }): VM.Target
-}
-interface ThreadConstructor {
-  new (id: string): VM.Thread
-  STATUS_DONE: number
-  STATUS_RUNNING: number
-}
-interface SequencerConstructor {
-  new (runtime: VM.Runtime): VM.Sequencer
-}
 ;(function (Scratch: ScratchContext) {
   const color = '#808080'
   const lppVersion = 'Development (for Turbowarp / Cocrea users)'
@@ -214,8 +184,7 @@ interface SequencerConstructor {
         if (
           blacklist.includes(event) &&
           args.length >= 1 &&
-          typeof args[0] === 'object' &&
-          args[0] !== null &&
+          args[0] instanceof Object &&
           Reflect.get(args[0], 'id') === ''
         ) {
           this.handleError(new LppError('useAfterDispose'))
@@ -235,10 +204,131 @@ interface SequencerConstructor {
           _stepThread.call(this, (this.activeThread = thread))
         }
       } else this.isEarlyScratch = false
+      // Patch Function.
+      Global.Function.set(
+        'deserialize',
+        LppFunction.native((self, args) => {
+          if (self !== Global.Function) {
+            const res = Global.IllegalInvocationError.construct([])
+            if (res instanceof globalThis.Promise)
+              throw new globalThis.Error(
+                'lpp: IllegalInvocationError constructor should be synchronous'
+              )
+            if (res instanceof LppException) return res
+            return new LppException(res.value)
+          }
+          const val: unknown = deserializeObject(
+            args[0] ?? new LppConstant(null)
+          )
+          if (val instanceof LppObject && val.value.size === 0) {
+            const fn = new LppFunction(() => {
+              return new LppReturn(new LppConstant(null))
+            })
+            fn.set(
+              'serialize',
+              LppFunction.native(
+                LppExtension.serializeFunction.bind(
+                  undefined,
+                  fn,
+                  undefined,
+                  undefined,
+                  undefined
+                )
+              )
+            )
+            return new LppReturn(fn)
+          }
+          if (Validator.isInfo(val)) {
+            const Blocks = this.runtime.flyoutBlocks
+              .constructor as BlocksConstructor
+            const blocks = new Blocks(this.runtime, true)
+            deserializeBlock(blocks, val.script)
+            const fn = new LppFunction((self, args) => {
+              const { Thread, Target, Sequencer } = {
+                Thread: this.runtime.threads[0]
+                  .constructor as ThreadConstructor,
+                Target: this.runtime.targets[0]
+                  .constructor as TargetConstructor,
+                Sequencer: this.runtime.sequencer
+                  .constructor as SequencerConstructor
+              } // Thread, Target and Sequencer do exist because we need at least a target and thread in order to call generated function.
+              let resolveFn: ((v: LppReturnOrException) => void) | undefined
+              let syncResult: LppReturnOrException | undefined
+              const target = this.createDummyTarget(Target, blocks)
+              const thread = this.createThread(
+                Thread,
+                val.entry,
+                target
+              ) as LppCompatibleThread
+              thread.lpp = new LppFunctionContext(
+                undefined,
+                self ?? new LppConstant(null),
+                val => {
+                  if (!syncResult) {
+                    if (resolveFn) resolveFn(val)
+                    else syncResult = val
+                  }
+                },
+                val => {
+                  if (!syncResult) {
+                    if (resolveFn) resolveFn(val)
+                    else syncResult = val
+                  }
+                }
+              )
+              for (const [key, value] of val.signature.entries()) {
+                if (key < args.length) thread.lpp.closure.set(value, args[key])
+                else thread.lpp.closure.set(value, new LppConstant(null))
+              }
+              // TODO: no reserved variable names!
+              // builtin.Array.apply(null, args).then(value => {
+              //   thread.lpp.closure.set('arguments', value)
+              // })
+              // Call callback (if exists) when the thread is finished.
+              this.bindThread(thread, () => {
+                ;(thread as LppCompatibleThread)?.lpp?.returnCallback(
+                  new LppReturn(new LppConstant(null))
+                )
+              })
+              const seq = new Sequencer(this.runtime)
+              seq.stepThread(thread)
+              return (
+                syncResult ??
+                new Promise<LppReturnOrException>(resolve => {
+                  resolveFn = resolve
+                })
+              )
+            })
+            // TODO: serialize method for Scratch blocks, also Function.deserialize(json)
+            fn.set(
+              'serialize',
+              LppFunction.native(
+                LppExtension.serializeFunction.bind(
+                  undefined,
+                  fn,
+                  val.entry,
+                  blocks,
+                  val.signature
+                )
+              )
+            )
+            return new LppReturn(fn)
+          }
+          const res = Global.SyntaxError.construct([
+            new LppConstant('Invalid value')
+          ])
+          if (res instanceof globalThis.Promise)
+            throw new globalThis.Error(
+              'lpp: SyntaxError constructor should be synchronous'
+            )
+          if (res instanceof LppException) return res
+          return new LppException(res.value)
+        })
+      )
       // Export
       this.runtime.lpp = {
         LppValue,
-        LppChildValue,
+        LppReference,
         LppConstant,
         LppArray,
         LppObject,
@@ -246,6 +336,7 @@ interface SequencerConstructor {
         LppReturn,
         LppException,
         LppPromise,
+        Wrapper,
         version: lppVersion,
         global
       }
@@ -294,7 +385,7 @@ interface SequencerConstructor {
      * Get extension info.
      * @returns Extension info.
      */
-    getInfo(): unknown {
+    getInfo() {
       // Sometimes getInfo() is called multiple times due to engine defects.
       if (!this.initalized) {
         this.initalized = true
@@ -520,9 +611,9 @@ interface SequencerConstructor {
      * @param param0 Function name.
      * @returns Class.
      */
-    builtinType({ value }: { value: string }): LppValue {
+    builtinType({ value }: { value: string }): Wrapper<LppValue> {
       const instance = global.get(value)
-      if (instance) return instance
+      if (instance) return new Wrapper(instance)
       throw new Error('lpp: Not implemented')
     }
     /**
@@ -530,7 +621,7 @@ interface SequencerConstructor {
      * @param args Function name.
      * @returns Class.
      */
-    builtinError(args: { value: string }): LppValue {
+    builtinError(args: { value: string }): Wrapper<LppValue> {
       return this.builtinType(args)
     }
     /**
@@ -538,7 +629,7 @@ interface SequencerConstructor {
      * @param args Function name.
      * @returns Class.
      */
-    builtinUtility(args: { value: string }): LppValue {
+    builtinUtility(args: { value: string }): Wrapper<LppValue> {
       return this.builtinType(args)
     }
     /**
@@ -550,7 +641,7 @@ interface SequencerConstructor {
     constructLiteral(
       { value }: { value: unknown },
       { thread }: VM.BlockUtility
-    ): LppConstant | void {
+    ): Wrapper<LppConstant> | void {
       if (this.shouldExit(thread)) {
         try {
           return thread.stopThisScript()
@@ -560,15 +651,15 @@ interface SequencerConstructor {
       }
       switch (value) {
         case 'null':
-          return LppConstant.init(null)
+          return new Wrapper(new LppConstant(null))
         case 'true':
-          return LppConstant.init(true)
+          return new Wrapper(new LppConstant(true))
         case 'false':
-          return LppConstant.init(false)
+          return new Wrapper(new LppConstant(false))
         case 'NaN':
-          return LppConstant.init(NaN)
+          return new Wrapper(new LppConstant(NaN))
         case 'Infinity':
-          return LppConstant.init(Infinity)
+          return new Wrapper(new LppConstant(Infinity))
       }
       throw new Error('lpp: Unknown literal')
     }
@@ -581,7 +672,7 @@ interface SequencerConstructor {
     binaryOp(
       { lhs, op, rhs }: { lhs: unknown; op: string | number; rhs: unknown },
       { thread }: VM.BlockUtility
-    ): LppValue | LppChildValue | void {
+    ): Wrapper<LppValue> | Wrapper<LppReference> | void {
       try {
         if (this.shouldExit(thread)) {
           try {
@@ -590,25 +681,24 @@ interface SequencerConstructor {
             return
           }
         }
+        lhs = Wrapper.unwrap(lhs)
+        rhs = Wrapper.unwrap(rhs)
         if (op === '.') {
-          if (lhs instanceof LppValue || lhs instanceof LppChildValue) {
+          if (lhs instanceof LppValue || lhs instanceof LppReference) {
             if (typeof rhs === 'string' || typeof rhs === 'number') {
-              return lhs.get(`${rhs}`)
-            } else if (
-              rhs instanceof LppValue ||
-              rhs instanceof LppChildValue
-            ) {
+              return new Wrapper(lhs.get(`${rhs}`))
+            } else if (rhs instanceof LppValue || rhs instanceof LppReference) {
               const n = ensureValue(rhs)
               if (n instanceof LppConstant && n.value !== null) {
-                return lhs.get(n.toString())
+                return new Wrapper(lhs.get(n.toString()))
               }
             }
             throw new LppError('invalidIndex')
           }
           throw new LppError('syntaxError')
         } else if (
-          (lhs instanceof LppValue || lhs instanceof LppChildValue) &&
-          (rhs instanceof LppValue || rhs instanceof LppChildValue)
+          (lhs instanceof LppValue || lhs instanceof LppReference) &&
+          (rhs instanceof LppValue || rhs instanceof LppReference)
         ) {
           switch (op) {
             case '=':
@@ -639,7 +729,7 @@ interface SequencerConstructor {
               const right = ensureValue(rhs)
               if (!(left instanceof LppConstant && left.value !== null))
                 throw new LppError('invalidIndex')
-              return LppConstant.init(right.has(left.toString()))
+              return new Wrapper(new LppConstant(right.has(left.toString())))
             }
             default:
               throw new Error('lpp: unknown operand')
@@ -660,7 +750,7 @@ interface SequencerConstructor {
     unaryOp(
       { op, value }: { op: string; value: unknown },
       { thread }: VM.BlockUtility
-    ): Promise<LppValue | undefined> | LppValue | void {
+    ): Promise<Wrapper<LppValue> | undefined> | Wrapper<LppValue> | void {
       /**
        * ['+', '+'],
          ['-', '-'],
@@ -679,7 +769,8 @@ interface SequencerConstructor {
             return
           }
         }
-        if (!(value instanceof LppValue || value instanceof LppChildValue))
+        value = Wrapper.unwrap(value)
+        if (!(value instanceof LppValue || value instanceof LppReference))
           throw new LppError('syntaxError')
         switch (op) {
           case '+':
@@ -702,24 +793,24 @@ interface SequencerConstructor {
           //   let thenSelf
           //   /** @type {LppValue} */
           //   let catchSelf
-          //   if (then instanceof LppChildValue) {
+          //   if (then instanceof LppReference) {
           //     if (!(then.value instanceof LppFunction)) return v
           //     thenFn = then.value
-          //     thenSelf = then.parent.deref() ?? LppConstant.init(null)
+          //     thenSelf = then.parent.deref() ?? new LppConstant(null)
           //   } else {
           //     if (!(then instanceof LppFunction)) return v
           //     thenFn = then
-          //     thenSelf = LppConstant.init(null)
+          //     thenSelf = new LppConstant(null)
           //   }
-          //   if (error instanceof LppChildValue) {
+          //   if (error instanceof LppReference) {
           //     if (error.value instanceof LppFunction) {
           //     catchFn = error.value
-          //     catchSelf = error.parent.deref() ?? LppConstant.init(null)
+          //     catchSelf = error.parent.deref() ?? new LppConstant(null)
           //     }
           //   } else {
           //     if (error instanceof LppFunction) {
           //       catchFn = error
-          //       catchSelf = LppConstant.init(null)
+          //       catchSelf = new LppConstant(null)
           //     }
           //   }
           //   function registerThenCallback() {
@@ -750,9 +841,10 @@ interface SequencerConstructor {
         unknown
       >,
       { thread }: VM.BlockUtility
-    ): Promise<void | LppValue> | LppValue | void {
+    ): Promise<void | Wrapper<LppValue>> | Wrapper<LppValue> | void {
       try {
-        const { fn } = args
+        let { fn } = args
+        fn = Wrapper.unwrap(fn)
         const actualArgs: LppValue[] = []
         // runtime hack by @FurryR.
         if (this.shouldExit(thread)) {
@@ -764,23 +856,23 @@ interface SequencerConstructor {
         }
         const len = parseInt(this.getMutation(args, thread)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
-          const value = args[`ARG_${i}`]
-          if (value instanceof LppValue || value instanceof LppChildValue)
+          const value = Wrapper.unwrap(args[`ARG_${i}`])
+          if (value instanceof LppValue || value instanceof LppReference)
             actualArgs[i] = ensureValue(value)
           else throw new LppError('syntaxError')
         }
-        if (!(fn instanceof LppValue || fn instanceof LppChildValue))
+        if (!(fn instanceof LppValue || fn instanceof LppReference))
           throw new LppError('syntaxError')
         const func = ensureValue(fn)
         if (func instanceof LppFunction) {
           const res = func.apply(
-            fn instanceof LppChildValue
-              ? fn.parent.deref() ?? LppConstant.init(null)
-              : LppConstant.init(null),
+            fn instanceof LppReference
+              ? fn.parent.deref() ?? new LppConstant(null)
+              : new LppConstant(null),
             actualArgs
           )
           if (res instanceof Promise) {
-            return res.then((result) => {
+            return res.then(result => {
               return this.processApplyValue(result, thread)
             })
           } else {
@@ -803,9 +895,10 @@ interface SequencerConstructor {
         unknown
       >,
       { thread }: VM.BlockUtility
-    ): Promise<void | LppValue> | LppValue | void {
+    ): Promise<void | Wrapper<LppValue>> | Wrapper<LppValue> | void {
       try {
         let { fn } = args
+        fn = Wrapper.unwrap(fn)
         // runtime hack by @FurryR.
         const actualArgs: LppValue[] = []
         // runtime hack by @FurryR.
@@ -818,18 +911,18 @@ interface SequencerConstructor {
         }
         const len = parseInt(this.getMutation(args, thread)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
-          const value = args[`ARG_${i}`]
-          if (value instanceof LppValue || value instanceof LppChildValue)
+          const value = Wrapper.unwrap(args[`ARG_${i}`])
+          if (value instanceof LppValue || value instanceof LppReference)
             actualArgs[i] = ensureValue(value)
           else throw new LppError('syntaxError')
         }
-        if (!(fn instanceof LppValue || fn instanceof LppChildValue))
+        if (!(fn instanceof LppValue || fn instanceof LppReference))
           throw new LppError('syntaxError')
         fn = ensureValue(fn)
         if (!(fn instanceof LppFunction)) throw new LppError('notCallable')
         const res = fn.construct(actualArgs)
         if (res instanceof Promise) {
-          return res.then((result) => {
+          return res.then(result => {
             return this.processApplyValue(result, thread)
           })
         } else {
@@ -845,7 +938,10 @@ interface SequencerConstructor {
      * @param util Scratch util.
      * @returns Result.
      */
-    self(_args: unknown, { thread }: VM.BlockUtility): LppValue | void {
+    self(
+      _args: unknown,
+      { thread }: VM.BlockUtility
+    ): Wrapper<LppValue> | void {
       try {
         if (this.shouldExit(thread)) {
           try {
@@ -857,7 +953,7 @@ interface SequencerConstructor {
         const lppThread = thread as LppCompatibleThread
         if (lppThread.lpp) {
           const unwind = lppThread.lpp.unwind()
-          if (unwind) return unwind.self
+          if (unwind) return new Wrapper(unwind.self)
         }
         throw new LppError('useOutsideFunction')
       } catch (e) {
@@ -873,8 +969,8 @@ interface SequencerConstructor {
       value
     }: {
       value: string | number
-    }): LppConstant<number> {
-      return LppConstant.init(Number(value))
+    }): Wrapper<LppConstant<number>> {
+      return new Wrapper(new LppConstant(Number(value)))
     }
     /**
      * Construct a String.
@@ -885,8 +981,8 @@ interface SequencerConstructor {
       value
     }: {
       value: string | number
-    }): LppConstant<string> {
-      return LppConstant.init(`${value}`)
+    }): Wrapper<LppConstant<string>> {
+      return new Wrapper(new LppConstant(`${value}`))
     }
     /**
      * Construct an Array.
@@ -897,7 +993,7 @@ interface SequencerConstructor {
     constructArray(
       args: Record<string, unknown>,
       { thread }: VM.BlockUtility
-    ): LppArray | void {
+    ): Wrapper<LppArray> | void {
       try {
         if (this.shouldExit(thread)) {
           try {
@@ -909,12 +1005,12 @@ interface SequencerConstructor {
         const arr = new LppArray()
         const len = parseInt(this.getMutation(args, thread)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
-          const value = args[`ARG_${i}`]
-          if (!(value instanceof LppValue || value instanceof LppChildValue))
+          const value = Wrapper.unwrap(args[`ARG_${i}`])
+          if (!(value instanceof LppValue || value instanceof LppReference))
             throw new LppError('syntaxError')
           arr.value.push(ensureValue(value))
         }
-        return arr
+        return new Wrapper(arr)
       } catch (e) {
         this.handleError(e)
       }
@@ -928,7 +1024,7 @@ interface SequencerConstructor {
     constructObject(
       args: Record<string, unknown>,
       { thread }: VM.BlockUtility
-    ): LppObject | void {
+    ): Wrapper<LppObject> | void {
       try {
         if (this.shouldExit(thread)) {
           try {
@@ -940,23 +1036,23 @@ interface SequencerConstructor {
         const obj = new LppObject()
         const len = parseInt(this.getMutation(args, thread)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
-          let key = args[`KEY_${i}`]
-          const value = args[`VALUE_${i}`]
+          let key = Wrapper.unwrap(args[`KEY_${i}`])
+          const value = Wrapper.unwrap(args[`VALUE_${i}`])
           if (typeof key === 'string' || typeof key === 'number') {
             key = `${key}`
           } else if (key instanceof LppConstant) {
             key = key.toString()
           } else if (
-            key instanceof LppChildValue &&
+            key instanceof LppReference &&
             key.value instanceof LppConstant
           ) {
             key = key.value.toString()
           } else throw new LppError('invalidIndex')
-          if (!(value instanceof LppValue || value instanceof LppChildValue))
+          if (!(value instanceof LppValue || value instanceof LppReference))
             throw new LppError('syntaxError')
           obj.set(key as string, ensureValue(value))
         }
-        return obj
+        return new Wrapper(obj)
       } catch (e) {
         this.handleError(e)
       }
@@ -970,7 +1066,7 @@ interface SequencerConstructor {
     constructFunction(
       args: Record<string, unknown>,
       { thread, target }: VM.BlockUtility
-    ): LppFunction | void {
+    ): Wrapper<LppFunction> | void {
       try {
         const { Thread, Target, Sequencer } = {
           Thread: thread.constructor as ThreadConstructor,
@@ -993,7 +1089,7 @@ interface SequencerConstructor {
         )
         for (let i = 0; i < len; i++) {
           if (typeof args[`ARG_${i}`] !== 'object')
-            signature[i] = `${args[`ARG_${i}`]}`
+            signature[i] = String(args[`ARG_${i}`])
           else throw new LppError('syntaxError')
         }
         let context: LppContext | undefined
@@ -1006,28 +1102,11 @@ interface SequencerConstructor {
         const fn = new LppFunction((self, args) => {
           let resolveFn: ((v: LppReturnOrException) => void) | undefined
           let syncResult: LppReturnOrException | undefined
-          let target = this.runtime.getTargetById(targetId)
-          if (target === undefined) {
-            // Use a dummy target instead of the original disposed target
-            target = new Target({
-              blocks
-            })
-            target.id = ''
-            target.runtime = this.runtime
-            const warnFn = (): never => {
-              this.handleError(new LppError('useAfterDispose'))
-            }
-            // Patch some functions to disable user's ability to access the dummy's sprite, which is not exist.
-            for (const key of Reflect.ownKeys(target.constructor.prototype)) {
-              if (typeof key === 'string' && key.startsWith('set')) {
-                Reflect.set(target, key, warnFn)
-              }
-            }
-            // Also, clones.
-            target.makeClone = warnFn
-          }
+          const target =
+            this.runtime.getTargetById(targetId) ??
+            this.createDummyTarget(Target, blocks)
           if (!block.inputs.SUBSTACK)
-            return new LppReturn(LppConstant.init(null))
+            return new LppReturn(new LppConstant(null))
           const id = block.inputs.SUBSTACK.block
           const thread = this.createThread(
             Thread,
@@ -1036,14 +1115,14 @@ interface SequencerConstructor {
           ) as LppCompatibleThread
           thread.lpp = new LppFunctionContext(
             context,
-            self ?? LppConstant.init(null),
-            (val) => {
+            self ?? new LppConstant(null),
+            val => {
               if (!syncResult) {
                 if (resolveFn) resolveFn(val)
                 else syncResult = val
               }
             },
-            (val) => {
+            val => {
               if (!syncResult) {
                 if (resolveFn) resolveFn(val)
                 else syncResult = val
@@ -1052,7 +1131,7 @@ interface SequencerConstructor {
           )
           for (const [key, value] of signature.entries()) {
             if (key < args.length) thread.lpp.closure.set(value, args[key])
-            else thread.lpp.closure.set(value, LppConstant.init(null))
+            else thread.lpp.closure.set(value, new LppConstant(null))
           }
           // TODO: no reserved variable names!
           // builtin.Array.apply(null, args).then(value => {
@@ -1061,32 +1140,31 @@ interface SequencerConstructor {
           // Call callback (if exists) when the thread is finished.
           this.bindThread(thread, () => {
             ;(thread as LppCompatibleThread)?.lpp?.returnCallback(
-              new LppReturn(LppConstant.init(null))
+              new LppReturn(new LppConstant(null))
             )
           })
           const seq = new Sequencer(this.runtime)
           seq.stepThread(thread)
           return (
             syncResult ??
-            new Promise<LppReturnOrException>((resolve) => {
+            new Promise<LppReturnOrException>(resolve => {
               resolveFn = resolve
             })
           )
         })
-        // TODO: toString method for Scratch blocks, also Function.from(json)
-        // fn.set('toString', LppFunction.native((self, args) => {
-        //   if (self !== fn) {
-        //     const res = Global.IllegalInvocationError.construct([])
-        //     if (res instanceof globalThis.Promise)
-        //       throw new globalThis.Error(
-        //         'lpp: GlobalIllegalInvocationError constructor should be synchronous'
-        //       )
-        //     if (res instanceof LppException) return res
-        //     return new LppException(res.value)
-        //   }
-
-        // }))
-        return fn
+        fn.set(
+          'serialize',
+          LppFunction.native(
+            LppExtension.serializeFunction.bind(
+              undefined,
+              fn,
+              block.inputs.SUBSTACK?.block,
+              blocks,
+              signature
+            )
+          )
+        )
+        return new Wrapper(fn)
       } catch (e) {
         this.handleError(e)
       }
@@ -1100,7 +1178,7 @@ interface SequencerConstructor {
     var(
       args: { name: string },
       { thread }: VM.BlockUtility
-    ): LppChildValue | void {
+    ): Wrapper<LppReference> | void {
       try {
         if (this.shouldExit(thread)) {
           try {
@@ -1111,7 +1189,7 @@ interface SequencerConstructor {
         }
         const lppThread = thread as LppCompatibleThread
         if (lppThread.lpp) {
-          return lppThread.lpp.get(args.name)
+          return new Wrapper(lppThread.lpp.get(args.name))
         }
         throw new LppError('useOutsideContext')
       } catch (e) {
@@ -1132,7 +1210,8 @@ interface SequencerConstructor {
             return
           }
         }
-        if (!(value instanceof LppValue || value instanceof LppChildValue))
+        value = Wrapper.unwrap(value)
+        if (!(value instanceof LppValue || value instanceof LppReference))
           throw new LppError('syntaxError')
         const val = ensureValue(value)
         const lppThread = thread as LppCompatibleThread
@@ -1161,7 +1240,8 @@ interface SequencerConstructor {
             return
           }
         }
-        if (!(value instanceof LppValue || value instanceof LppChildValue))
+        value = Wrapper.unwrap(value)
+        if (!(value instanceof LppValue || value instanceof LppReference))
           throw new LppError('syntaxError')
         const val = ensureValue(value)
         const result = new LppException(val)
@@ -1214,13 +1294,13 @@ interface SequencerConstructor {
         let resolved = false
         scopeThread.lpp = new LppContext(
           parentThread.lpp ?? undefined,
-          (value) => {
+          value => {
             if (parentThread.lpp) {
               parentThread.lpp.returnCallback(value)
               return scopeThread.stopThisScript()
             } else throw new LppError('useOutsideFunction')
           },
-          (value) => {
+          value => {
             value.pushStack(
               new LppTraceback.Block(
                 thread.peekStack(),
@@ -1242,7 +1322,7 @@ interface SequencerConstructor {
         const seq = new Sequencer(this.runtime)
         seq.stepThread(scopeThread)
         if (resolved) return
-        return new Promise<void>((resolve) => {
+        return new Promise<void>(resolve => {
           resolveFn = resolve
         })
       } catch (e) {
@@ -1273,8 +1353,8 @@ interface SequencerConstructor {
         }
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, thread)
-        const dest = args.var
-        if (!(dest instanceof LppChildValue)) throw new LppError('syntaxError')
+        const dest = Wrapper.unwrap(args.var)
+        if (!(dest instanceof LppReference)) throw new LppError('syntaxError')
         const id = block.inputs.SUBSTACK?.block
         if (!id) return
         const captureId = block.inputs.SUBSTACK_2?.block
@@ -1289,13 +1369,13 @@ interface SequencerConstructor {
         let resolved = false
         tryThread.lpp = new LppContext(
           parentThread.lpp ?? undefined,
-          (value) => {
+          value => {
             if (parentThread.lpp) {
               parentThread.lpp.returnCallback(value)
               return tryThread.stopThisScript()
             } else throw new LppError('useOutsideFunction')
           },
-          (value) => {
+          value => {
             triggered = true
             if (!captureId) {
               if (resolveFn) resolveFn()
@@ -1308,7 +1388,7 @@ interface SequencerConstructor {
             const error = value.value
             if (error.instanceof(GlobalError)) {
               const traceback = new LppArray(
-                value.stack.map((v) => LppConstant.init(v.toString()))
+                value.stack.map(v => new LppConstant(v.toString()))
               )
               error.set('stack', traceback)
             }
@@ -1320,13 +1400,13 @@ interface SequencerConstructor {
             ) as LppCompatibleThread
             catchThread.lpp = new LppContext(
               parentThread.lpp ?? undefined,
-              (value) => {
+              value => {
                 if (parentThread.lpp) {
                   parentThread.lpp.returnCallback(value)
                   return thread.stopThisScript()
                 } else throw new LppError('useOutsideFunction')
               },
-              (value) => {
+              value => {
                 value.pushStack(
                   new LppTraceback.Block(
                     thread.peekStack(),
@@ -1358,7 +1438,7 @@ interface SequencerConstructor {
         const seq = new Sequencer(this.runtime)
         seq.stepThread(tryThread)
         if (resolved) return
-        return new Promise((resolve) => {
+        return new Promise(resolve => {
           resolveFn = resolve
         })
       } catch (e) {
@@ -1384,7 +1464,7 @@ interface SequencerConstructor {
      * Handle syntax error.
      * @param e Error object.
      */
-    handleError(e: unknown): never {
+    private handleError(e: unknown): never {
       if (e instanceof LppError) {
         const thread = this.runtime.sequencer.activeThread
         if (thread) {
@@ -1401,7 +1481,7 @@ interface SequencerConstructor {
      * Handle unhandled exceptions.
      * @param e LppException object.
      */
-    handleException(e: LppException): never {
+    private handleException(e: LppException): never {
       warnException(
         this.Blockly,
         this.runtime,
@@ -1417,7 +1497,7 @@ interface SequencerConstructor {
      * @param target Thread target.
      * @returns Thread instance.
      */
-    createThread(
+    private createThread(
       threadConstructor: ThreadConstructor,
       id: string,
       target: VM.Target
@@ -1435,7 +1515,7 @@ interface SequencerConstructor {
      * @param thread Thread object.
      * @param fn Dedicated function.
      */
-    bindThread(thread: LppCompatibleThread, fn: () => void) {
+    private bindThread(thread: LppCompatibleThread, fn: () => void) {
       // Call callback (if exists) when the thread is finished.
       let status = thread.status
       let flag = false
@@ -1445,7 +1525,7 @@ interface SequencerConstructor {
         get: () => {
           return status
         },
-        set: (newStatus) => {
+        set: newStatus => {
           status = newStatus
           if (status === threadConstructor.STATUS_DONE) {
             if (!alreadyCalled) {
@@ -1475,8 +1555,8 @@ interface SequencerConstructor {
          * Patched pushStack().
          * @param blockId
          */
-        thread.pushStack = (blockId) => {
-          if (blockId === null && !alreadyCalled) {
+        thread.pushStack = blockId => {
+          if (!blockId && !alreadyCalled) {
             alreadyCalled = true
             fn()
           }
@@ -1490,12 +1570,12 @@ interface SequencerConstructor {
      * @param thread Caller thread.
      * @returns processed value.
      */
-    processApplyValue(
+    private processApplyValue(
       result: LppReturnOrException,
       thread: LppCompatibleThread
-    ): LppValue | void {
+    ): Wrapper<LppValue> | void {
       if (result instanceof LppReturn) {
-        return result.value
+        return new Wrapper(result.value)
       } else {
         result.pushStack(
           new LppTraceback.Block(thread.peekStack(), thread.lpp ?? undefined)
@@ -1513,7 +1593,7 @@ interface SequencerConstructor {
      * @param thread Current thread.
      * @returns Whether the block is triggered by clicking on the mutator icon.
      */
-    shouldExit(thread: VM.Thread): boolean {
+    private shouldExit(thread: VM.Thread): boolean {
       if (this.mutatorClick) {
         if (thread.stack.length === 1) this.mutatorClick = false
         if (thread.stackClick) return true
@@ -1526,13 +1606,13 @@ interface SequencerConstructor {
      * @param thread Thread.
      * @returns Block instance.
      */
-    getActiveBlockInstance(
+    private getActiveBlockInstance(
       args: object,
       thread: LppCompatibleThread
     ): VM.Block {
       const container = thread.blockContainer as LppCompatibleBlocks
       let id = container._cache._executeCached[thread.peekStack()]?._ops?.find(
-        (v) => args === v._argValues
+        v => args === v._argValues
       )?.id
       if (!id && thread.isCompiled) {
         // patch: In TurboWarp, we can simply use thread.peekStack() to get the lambda's ID.
@@ -1552,7 +1632,7 @@ interface SequencerConstructor {
      * @param thread Thread.
      * @returns mutation object.
      */
-    getMutation(
+    private getMutation(
       args: Record<string, unknown>,
       thread: LppCompatibleThread
     ): null | Record<string, string> {
@@ -1564,9 +1644,73 @@ interface SequencerConstructor {
         >)
       )
     }
+    /**
+     * Create a dummy target.
+     * @param Target Target constructor.
+     * @param blocks Block container.
+     * @returns Dummy target.
+     */
+    private createDummyTarget(
+      Target: TargetConstructor,
+      blocks: VM.Blocks
+    ): VM.Target {
+      // Use a dummy target instead of the original disposed target
+      const target = new Target({
+        blocks
+      })
+      target.id = ''
+      target.runtime = this.runtime
+      const warnFn = (): never => {
+        this.handleError(new LppError('useAfterDispose'))
+      }
+      // Patch some functions to disable user's ability to access the dummy's sprite, which is not exist.
+      for (const key of Reflect.ownKeys(target.constructor.prototype)) {
+        if (typeof key === 'string' && key.startsWith('set')) {
+          Reflect.set(target, key, warnFn)
+        }
+      }
+      // Also, clones.
+      target.makeClone = warnFn
+      return target
+    }
+    /**
+     * Serialize function.
+     * @param fn Function itself for `self` detection.
+     * @param entry Entry block ID.
+     * @param blocks Blocks instance.
+     * @param signature Function signature.
+     * @param self Self object for LppFunction.
+     * @returns LppFunction result.
+     */
+    private static serializeFunction(
+      fn: LppFunction,
+      entry: string | undefined,
+      blocks: VM.Blocks | undefined,
+      signature: string[] | undefined,
+      self: LppValue
+    ): LppReturnOrException {
+      if (self !== fn) {
+        const res = Global.IllegalInvocationError.construct([])
+        if (res instanceof globalThis.Promise)
+          throw new globalThis.Error(
+            'lpp: IllegalInvocationError constructor should be synchronous'
+          )
+        if (res instanceof LppException) return res
+        return new LppException(res.value)
+      }
+      if (!entry || !blocks || !signature) return new LppReturn(new LppObject())
+      const childBlock = blocks.getBlock(entry)
+      if (!childBlock) return new LppReturn(new LppObject())
+      const info: SerializationInfo = {
+        signature,
+        script: serializeBlock(blocks as LppCompatibleBlocks, childBlock),
+        entry
+      }
+      return new LppReturn(serializeObject(info))
+    }
   }
-  if (Scratch.vm) {
-    Scratch.extensions.register(new LppExtension(Scratch.vm?.runtime))
+  if (Scratch.vm?.runtime) {
+    Scratch.extensions.register(new LppExtension(Scratch.vm.runtime))
   } else {
     // Compatible with CCW
     Reflect.set(window, 'tempExt', {

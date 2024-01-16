@@ -51,14 +51,14 @@ export abstract class LppValue {
    * @param key Key to get.
    * @returns Value if exist.
    */
-  abstract get(key: string): LppValue | LppChildValue
+  abstract get(key: string): LppValue | LppReference
   /**
    * @abstract Set a value.
    * @param key Key to set.
    * @param value Value to set.
    * @returns Value.
    */
-  abstract set(key: string, value: LppValue): LppChildValue
+  abstract set(key: string, value: LppValue): LppReference
   /**
    * Detect whether a value exists.
    * @param key Key to detect.
@@ -87,30 +87,23 @@ export abstract class LppValue {
    * @param op Binary operator.
    * @param rhs Right hand side of the operation.
    */
-  abstract calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppChildValue
+  abstract calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppReference
   /**
    * Do unary arithmetic operations.
    * @param op Unary operator.
    */
-  abstract calc(op: LppUnaryOperator): LppValue | LppChildValue
+  abstract calc(op: LppUnaryOperator): LppValue | LppReference
   /**
    * Fallback action for invalid operators.
    * @param op Invalid operator.
    * @param rhs Right hand side of the operation.
    */
   abstract calc(op: string, rhs?: LppValue): never
-  /**
-   * [Fallback] valueOf for compatibility with other extensions.
-   * @returns Value.
-   */
-  valueOf(): unknown {
-    return this
-  }
 }
 /**
  * Lpp compatible object (with scope).
  */
-export class LppChildValue implements LppValue {
+export class LppReference implements LppValue {
   /**
    * Parent object.
    */
@@ -120,7 +113,7 @@ export class LppChildValue implements LppValue {
    * @param key Value to get.
    * @param key Child object.
    */
-  get(key: string): LppValue | LppChildValue {
+  get(key: string): LppValue | LppReference {
     return this.value.get(key)
   }
   /**
@@ -129,7 +122,7 @@ export class LppChildValue implements LppValue {
    * @param value Value to set.
    * @returns Value.
    */
-  set(key: string, value: LppValue): LppChildValue {
+  set(key: string, value: LppValue): LppReference {
     return this.value.set(key, value)
   }
   /**
@@ -164,7 +157,7 @@ export class LppChildValue implements LppValue {
    * @param value Value to set.
    * @returns New value.
    */
-  assign(value: LppValue): LppChildValue {
+  assign(value: LppValue): LppReference {
     const parent = this.parent.deref()
     if (!parent) throw new LppError('assignOfConstant')
     parent.set(this.name, value)
@@ -179,34 +172,27 @@ export class LppChildValue implements LppValue {
     return this.value.toString()
   }
   /**
-   * valueOf for compatibility with other extensions.
-   * @returns Value.
-   */
-  valueOf(): unknown {
-    return this.value.valueOf()
-  }
-  /**
    * Do binary arithmetic operations.
    * @param op Binary operator.
    * @param rhs Right hand side of the operation.
    */
-  calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppChildValue
+  calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppReference
   /**
    * Do unary arithmetic operations.
    * @param op Unary operator.
    */
-  calc(op: LppUnaryOperator): LppValue | LppChildValue
+  calc(op: LppUnaryOperator): LppValue | LppReference
   /**
    * Fallback action for invalid operators.
    * @param op Invalid operator.
    * @param rhs Right hand side of the operation.
    */
   calc(op: string): never
-  calc(op: string, rhs?: LppValue): LppValue | LppChildValue {
+  calc(op: string, rhs?: LppValue): LppValue | LppReference {
     if (op === '=' && rhs) {
       return this.assign(rhs)
     } else if (op === 'delete' && !rhs) {
-      return LppConstant.init(this.delete())
+      return new LppConstant(this.delete())
     }
     return this.value.calc(op, rhs)
   }
@@ -287,23 +273,6 @@ function comparePrototype(
 }
 export type JSConstant = boolean | number | string | null
 export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
-  static cache = new Map<JSConstant, WeakRef<LppConstant<JSConstant>>>()
-  /**
-   * Make constant value.
-   * @template T Type of the value.
-   * @param value Value.
-   * @returns Instance.
-   */
-  static init<T extends JSConstant>(value: T): LppConstant<T> {
-    const v = LppConstant.cache.get(value)
-    if (v) {
-      const deref = v.deref()
-      if (deref) return deref as LppConstant<T>
-    }
-    const obj = new LppConstant(value)
-    LppConstant.cache.set(value, new WeakRef(obj))
-    return obj
-  }
   /**
    * @returns The stored value.
    */
@@ -315,26 +284,26 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
    * @param key Value to get.
    * @returns Child object.
    */
-  get(key: string): LppValue | LppChildValue {
+  get(key: string): LppValue | LppReference {
     if (this.value === null) throw new LppError('accessOfNull')
     if (key === 'constructor') {
       switch (typeof this.value) {
         case 'string':
-          return global.get('String') ?? LppConstant.init(null)
+          return global.get('String') ?? new LppConstant(null)
         case 'number':
-          return global.get('Number') ?? LppConstant.init(null)
+          return global.get('Number') ?? new LppConstant(null)
         case 'boolean':
-          return global.get('Boolean') ?? LppConstant.init(null)
+          return global.get('Boolean') ?? new LppConstant(null)
       }
     } else if (key === 'prototype') {
       // patch: disable access to constructor prototype.
-      return LppConstant.init(null)
+      return new LppConstant(null)
     } else {
       if (typeof this.value === 'string') {
         const idx = parseInt(key)
         if (!isNaN(idx)) {
           const v = this.value[idx]
-          return v !== undefined ? LppConstant.init(v) : LppConstant.init(null)
+          return v !== undefined ? new LppConstant(v) : new LppConstant(null)
         }
       }
       const constructor = ensureValue(this.get('constructor'))
@@ -348,8 +317,8 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
           'lpp: Unexpected prototype -- must be a LppObject instance'
         )
       const member = lookupPrototype(proto, key)
-      if (member === null) return LppConstant.init(null)
-      return new LppChildValue(this, key, member)
+      if (member === null) return new LppConstant(null)
+      return new LppReference(this, key, member)
     }
   }
   /**
@@ -410,30 +379,23 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
     return `${this.value}`
   }
   /**
-   * valueOf for compatibility with other extensions.
-   * @returns Value.
-   */
-  valueOf(): T {
-    return this.value
-  }
-  /**
    * Do binary arithmetic operations.
    * @param op Binary operator.
    * @param rhs Right hand side of the operation.
    */
-  calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppChildValue
+  calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppReference
   /**
    * Do unary arithmetic operations.
    * @param op Unary operator.
    */
-  calc(op: LppUnaryOperator): LppValue | LppChildValue
+  calc(op: LppUnaryOperator): LppValue | LppReference
   /**
    * Fallback action for invalid operators.
    * @param op Invalid operator.
    * @param rhs Right hand side of the operation.
    */
   calc(op: string): never
-  calc(op: string, rhs?: LppValue): LppValue | LppChildValue {
+  calc(op: string, rhs?: LppValue): LppValue | LppReference {
     if (rhs) {
       switch (op) {
         case '=': {
@@ -443,10 +405,10 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
           if (this.value !== null) {
             if (rhs instanceof LppConstant) {
               if (rhs.value !== null)
-                return LppConstant.init(mathOp(this, op, rhs))
+                return new LppConstant(mathOp(this, op, rhs))
             }
           }
-          return LppConstant.init(NaN)
+          return new LppConstant(NaN)
         }
         case '*': {
           if (this.value !== null) {
@@ -457,15 +419,15 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
                 typeof rhs.value === 'number'
               ) {
                 if (Number.isInteger(rhs.value))
-                  return LppConstant.init(this.value.repeat(rhs.value))
+                  return new LppConstant(this.value.repeat(rhs.value))
               } else if (
                 typeof this.value === 'number' &&
                 typeof rhs.value === 'string'
               ) {
                 if (Number.isInteger(this.value))
-                  return LppConstant.init(rhs.value.repeat(this.value))
+                  return new LppConstant(rhs.value.repeat(this.value))
               }
-              return LppConstant.init(mathOp(this, op, rhs))
+              return new LppConstant(mathOp(this, op, rhs))
             } else if (
               rhs instanceof LppArray &&
               (typeof this.value === 'boolean' ||
@@ -482,25 +444,25 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
               }
             }
           }
-          return LppConstant.init(NaN)
+          return new LppConstant(NaN)
         }
         case '==': {
-          return LppConstant.init(equal(this, rhs))
+          return new LppConstant(equal(this, rhs))
         }
         case '!=': {
-          return LppConstant.init(!equal(this, rhs))
+          return new LppConstant(!equal(this, rhs))
         }
         case '>':
         case '<':
         case '>=':
         case '<=': {
-          return LppConstant.init(compare(this, op, rhs))
+          return new LppConstant(compare(this, op, rhs))
         }
         case '&&':
         case '||': {
           const left = asBoolean(this)
           const right = asBoolean(rhs)
-          return LppConstant.init(op === '&&' ? left && right : left || right)
+          return new LppConstant(op === '&&' ? left && right : left || right)
         }
         // (Pure) math operands
         case '-':
@@ -519,12 +481,12 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
             typeof this.value === 'string' ||
             typeof rhs.value === 'string'
           )
-            return LppConstant.init(NaN)
-          return LppConstant.init(mathOp(this, op, rhs))
+            return new LppConstant(NaN)
+          return new LppConstant(mathOp(this, op, rhs))
         }
         case 'instanceof': {
           if (rhs instanceof LppFunction) {
-            return LppConstant.init(this.instanceof(rhs))
+            return new LppConstant(this.instanceof(rhs))
           }
           throw new LppError('notCallable')
         }
@@ -539,8 +501,8 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
               typeof this.value === 'string'
             )
           )
-            return LppConstant.init(NaN)
-          return LppConstant.init(+this.value)
+            return new LppConstant(NaN)
+          return new LppConstant(+this.value)
         }
         case '-': {
           if (
@@ -550,11 +512,11 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
               typeof this.value === 'string'
             )
           )
-            return LppConstant.init(NaN)
-          return LppConstant.init(-this.value)
+            return new LppConstant(NaN)
+          return new LppConstant(-this.value)
         }
         case '!': {
-          return LppConstant.init(!asBoolean(this))
+          return new LppConstant(!asBoolean(this))
         }
         case '~': {
           if (
@@ -564,10 +526,10 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
               typeof this.value === 'string'
             )
           )
-            return LppConstant.init(NaN)
+            return new LppConstant(NaN)
           const v = +this.value
-          if (isNaN(v)) return LppConstant.init(NaN)
-          return LppConstant.init(~v)
+          if (isNaN(v)) return new LppConstant(NaN)
+          return new LppConstant(~v)
         }
       }
     }
@@ -575,10 +537,9 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
   }
   /**
    * Constructs a value.
-   * @warning Don't use this constructor directly! Use initalize() instead.
    * @param value The value.
    */
-  private constructor(
+  constructor(
     /**
      * The stored value.
      */
@@ -593,16 +554,16 @@ export class LppObject extends LppValue {
    * @param key Value to get.
    * @returns Child object.
    */
-  get(key: string): LppValue | LppChildValue {
+  get(key: string): LppValue | LppReference {
     if (key === 'constructor') {
       return (
-        this.value.get(key) ?? global.get('Object') ?? LppConstant.init(null)
+        this.value.get(key) ?? global.get('Object') ?? new LppConstant(null)
       )
     } else {
       const res = this.value.get(key)
       // patch: disable access to constructor prototype.
       if (res || key == 'prototype')
-        return new LppChildValue(this, key, res ?? LppConstant.init(null))
+        return new LppReference(this, key, res ?? new LppConstant(null))
       const constructor = ensureValue(this.get('constructor'))
       if (!(constructor instanceof LppFunction))
         throw new Error(
@@ -615,8 +576,8 @@ export class LppObject extends LppValue {
         )
       const member = lookupPrototype(proto, key)
       if (member === null)
-        return new LppChildValue(this, key, LppConstant.init(null))
-      return new LppChildValue(this, key, member)
+        return new LppReference(this, key, new LppConstant(null))
+      return new LppReference(this, key, member)
     }
   }
   /**
@@ -625,9 +586,9 @@ export class LppObject extends LppValue {
    * @param value Value to set.
    * @returns Value.
    */
-  set(key: string, value: LppValue): LppChildValue {
+  set(key: string, value: LppValue): LppReference {
     this.value.set(key, value)
-    return new LppChildValue(this, key, value)
+    return new LppReference(this, key, value)
   }
   /**
    * Detect whether a value exists.
@@ -680,19 +641,19 @@ export class LppObject extends LppValue {
    * @param op Binary operator.
    * @param rhs Right hand side of the operation.
    */
-  calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppChildValue
+  calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppReference
   /**
    * Do unary arithmetic operations.
    * @param op Unary operator.
    */
-  calc(op: LppUnaryOperator): LppValue | LppChildValue
+  calc(op: LppUnaryOperator): LppValue | LppReference
   /**
    * Fallback action for invalid operators.
    * @param op Invalid operator.
    * @param rhs Right hand side of the operation.
    */
   calc(op: string): never
-  calc(op: string, rhs?: LppValue): LppValue | LppChildValue {
+  calc(op: string, rhs?: LppValue): LppValue | LppReference {
     if (rhs) {
       switch (op) {
         case '=': {
@@ -705,7 +666,7 @@ export class LppObject extends LppValue {
             !(rhs instanceof LppFunction)
           ) {
             if (this.value.has('constructor') || rhs.value.has('constructor')) {
-              return LppConstant.init(NaN)
+              return new LppConstant(NaN)
             }
             const ret = new LppObject()
             for (const [key, value] of this.value.entries()) {
@@ -716,29 +677,29 @@ export class LppObject extends LppValue {
             }
             return ret
           }
-          return LppConstant.init(NaN)
+          return new LppConstant(NaN)
         }
         case '==': {
-          return LppConstant.init(equal(this, rhs))
+          return new LppConstant(equal(this, rhs))
         }
         case '!=': {
-          return LppConstant.init(!equal(this, rhs))
+          return new LppConstant(!equal(this, rhs))
         }
         case '>':
         case '<':
         case '>=':
         case '<=': {
-          return LppConstant.init(compare(this, op, rhs))
+          return new LppConstant(compare(this, op, rhs))
         }
         case '&&':
         case '||': {
           const left = asBoolean(this)
           const right = asBoolean(rhs)
-          return LppConstant.init(op === '&&' ? left && right : left || right)
+          return new LppConstant(op === '&&' ? left && right : left || right)
         }
         case 'instanceof': {
           if (rhs instanceof LppFunction) {
-            return LppConstant.init(this.instanceof(rhs))
+            return new LppConstant(this.instanceof(rhs))
           }
           throw new LppError('notCallable')
         }
@@ -753,18 +714,18 @@ export class LppObject extends LppValue {
         case '&':
         case '|':
         case '^': {
-          return LppConstant.init(NaN)
+          return new LppConstant(NaN)
         }
       }
     } else {
       switch (op) {
         case '!': {
-          return LppConstant.init(!asBoolean(this))
+          return new LppConstant(!asBoolean(this))
         }
         case '+':
         case '-':
         case '~': {
-          return LppConstant.init(NaN)
+          return new LppConstant(NaN)
         }
       }
     }
@@ -790,15 +751,15 @@ export class LppArray extends LppValue {
    * @param key Value to get.
    * @returns Child object.
    */
-  get(key: string): LppValue | LppChildValue {
+  get(key: string): LppValue | LppReference {
     if (key === 'constructor') {
-      return global.get('Array') ?? LppConstant.init(null)
+      return global.get('Array') ?? new LppConstant(null)
     } else {
       const idx = parseInt(key, 10)
       if (idx >= 0) {
         const res = this.value[idx]
-        if (res) return new LppChildValue(this, key, res)
-        else return new LppChildValue(this, key, LppConstant.init(null))
+        if (res) return new LppReference(this, key, res)
+        else return new LppReference(this, key, new LppConstant(null))
       } else {
         const constructor = ensureValue(this.get('constructor'))
         if (!(constructor instanceof LppFunction))
@@ -812,7 +773,7 @@ export class LppArray extends LppValue {
           )
         const member = lookupPrototype(proto, key)
         if (member === null) throw new LppError('invalidIndex')
-        return new LppChildValue(this, key, member)
+        return new LppReference(this, key, member)
       }
     }
   }
@@ -822,11 +783,11 @@ export class LppArray extends LppValue {
    * @param value Value to set.
    * @returns Value.
    */
-  set(key: string, value: LppValue): LppChildValue {
+  set(key: string, value: LppValue): LppReference {
     const idx = parseInt(key, 10)
     if (idx >= 0) {
       this.value[idx] = value
-      return new LppChildValue(this, key, value)
+      return new LppReference(this, key, value)
     } else throw new LppError('invalidIndex')
   }
   /**
@@ -882,19 +843,19 @@ export class LppArray extends LppValue {
    * @param op Binary operator.
    * @param rhs Right hand side of the operation.
    */
-  calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppChildValue
+  calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppReference
   /**
    * Do unary arithmetic operations.
    * @param op Unary operator.
    */
-  calc(op: LppUnaryOperator): LppValue | LppChildValue
+  calc(op: LppUnaryOperator): LppValue | LppReference
   /**
    * Fallback action for invalid operators.
    * @param op Invalid operator.
    * @param rhs Right hand side of the operation.
    */
   calc(op: string): never
-  calc(op: string, rhs?: LppValue): LppValue | LppChildValue {
+  calc(op: string, rhs?: LppValue): LppValue | LppReference {
     if (rhs) {
       switch (op) {
         case '=': {
@@ -904,7 +865,7 @@ export class LppArray extends LppValue {
           if (rhs instanceof LppArray) {
             return new LppArray(this.value.concat(rhs.value))
           }
-          return LppConstant.init(NaN)
+          return new LppConstant(NaN)
         }
         case '*': {
           if (
@@ -920,29 +881,29 @@ export class LppArray extends LppValue {
               return ret
             }
           }
-          return LppConstant.init(NaN)
+          return new LppConstant(NaN)
         }
         case '==': {
-          return LppConstant.init(equal(this, rhs))
+          return new LppConstant(equal(this, rhs))
         }
         case '!=': {
-          return LppConstant.init(!equal(this, rhs))
+          return new LppConstant(!equal(this, rhs))
         }
         case '>':
         case '<':
         case '>=':
         case '<=': {
-          return LppConstant.init(compare(this, op, rhs))
+          return new LppConstant(compare(this, op, rhs))
         }
         case '&&':
         case '||': {
           const left = asBoolean(this)
           const right = asBoolean(rhs)
-          return LppConstant.init(op === '&&' ? left && right : left || right)
+          return new LppConstant(op === '&&' ? left && right : left || right)
         }
         case 'instanceof': {
           if (rhs instanceof LppFunction) {
-            return LppConstant.init(this.instanceof(rhs))
+            return new LppConstant(this.instanceof(rhs))
           }
           throw new LppError('notCallable')
         }
@@ -956,18 +917,18 @@ export class LppArray extends LppValue {
         case '&':
         case '|':
         case '^': {
-          return LppConstant.init(NaN)
+          return new LppConstant(NaN)
         }
       }
     } else {
       switch (op) {
         case '!': {
-          return LppConstant.init(!asBoolean(this))
+          return new LppConstant(!asBoolean(this))
         }
         case '+':
         case '-':
         case '~': {
-          return LppConstant.init(NaN)
+          return new LppConstant(NaN)
         }
       }
     }
@@ -1022,11 +983,11 @@ export class LppFunction extends LppObject {
     const obj: LppFunction = new LppFunction((self, args) => {
       const res = execute(self, args)
       if (res instanceof Promise) {
-        return res.then((value) =>
-          addNativeTraceback(value, obj, self ?? LppConstant.init(null), args)
+        return res.then(value =>
+          addNativeTraceback(value, obj, self ?? new LppConstant(null), args)
         )
       }
-      return addNativeTraceback(res, obj, self ?? LppConstant.init(null), args)
+      return addNativeTraceback(res, obj, self ?? new LppConstant(null), args)
     }, prototype)
     return obj
   }
@@ -1035,16 +996,16 @@ export class LppFunction extends LppObject {
    * @param key Value to get.
    * @returns Child object.
    */
-  get(key: string): LppValue | LppChildValue {
+  get(key: string): LppValue | LppReference {
     if (key === 'constructor') {
-      return global.get('Function') ?? LppConstant.init(null)
+      return global.get('Function') ?? new LppConstant(null)
     } else if (key === 'prototype') {
       const res = this.value.get(key)
       if (res) return res
       else throw new Error('lpp: unexpected get -- prototype is null')
     } else {
       const res = this.value.get(key)
-      if (res) return new LppChildValue(this, key, res)
+      if (res) return new LppReference(this, key, res)
       const constructor = ensureValue(this.get('constructor'))
       if (!(constructor instanceof LppFunction))
         throw new Error(
@@ -1057,8 +1018,8 @@ export class LppFunction extends LppObject {
         )
       const member = lookupPrototype(proto, key)
       if (member === null)
-        return new LppChildValue(this, key, LppConstant.init(null))
-      return new LppChildValue(this, key, member)
+        return new LppReference(this, key, new LppConstant(null))
+      return new LppReference(this, key, member)
     }
   }
   /**
@@ -1067,9 +1028,9 @@ export class LppFunction extends LppObject {
    * @param value Value to set.
    * @returns Value.
    */
-  set(key: string, value: LppValue): LppChildValue {
+  set(key: string, value: LppValue): LppReference {
     this.value.set(key, value)
-    return new LppChildValue(this, key, value)
+    return new LppReference(this, key, value)
   }
   /**
    * Detect whether a value exists.
@@ -1129,7 +1090,7 @@ export class LppFunction extends LppObject {
       this === global.get('Function') ||
       this === global.get('Object')
     )
-      return this.apply(LppConstant.init(null), args)
+      return this.apply(new LppConstant(null), args)
     const obj =
       this === global.get('Promise')
         ? new LppPromise()
@@ -1146,7 +1107,7 @@ export class LppFunction extends LppObject {
     }
     // TODO: migrate to isPromise() to allow PromiseLike
     if (res instanceof Promise) {
-      return res.then((result) => {
+      return res.then(result => {
         return process(result)
       })
     }
@@ -1197,22 +1158,22 @@ export class LppPromise extends LppObject {
     }
     const val = new LppPromise()
     this.pm.then(
-      (value) => {
+      value => {
         if (value instanceof LppValue) {
           const res = resolveFn.apply(this, [value])
           if (res instanceof Promise) {
-            return res.then((v) => processApplyValue(v, val))
+            return res.then(v => processApplyValue(v, val))
           }
           return processApplyValue(res, val)
         }
         throw new Error('lpp: unknown result')
       },
       rejectFn
-        ? (err) => {
+        ? err => {
             if (err instanceof LppValue) {
               const res = rejectFn.apply(this, [err])
               if (res instanceof Promise) {
-                return res.then((v) => processApplyValue(v, val))
+                return res.then(v => processApplyValue(v, val))
               }
               return processApplyValue(res, val)
             }
@@ -1235,11 +1196,11 @@ export class LppPromise extends LppObject {
       throw pm.reject(v.value)
     }
     const val = new LppPromise()
-    this.pm.catch((err) => {
+    this.pm.catch(err => {
       if (err instanceof LppValue) {
         const res = rejectFn.apply(this, [err])
         if (res instanceof Promise) {
-          return res.then((v) => processApplyValue(v, val))
+          return res.then(v => processApplyValue(v, val))
         }
         return processApplyValue(res, val)
       }

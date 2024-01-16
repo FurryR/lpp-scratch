@@ -213,7 +213,7 @@ export function defineBlocks(
     const vmBlock = target.blocks.getBlock(this.id)
     if (!vmBlock) return
 
-    const usedInputs = new Set(this.inputList.map((i) => i?.name))
+    const usedInputs = new Set(this.inputList.map(i => i?.name))
 
     const inputs = vmBlock.inputs
     for (const name of Object.keys(inputs)) {

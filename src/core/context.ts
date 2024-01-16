@@ -1,4 +1,4 @@
-import { LppConstant, LppValue, LppChildValue, LppFunction } from './type'
+import { LppConstant, LppValue, LppReference, LppFunction } from './type'
 /**
  * LppFunction return value.
  */
@@ -80,11 +80,11 @@ export class LppClosure extends LppValue {
    * @param key Value to get.
    * @returns Child object.
    */
-  get(key: string): LppChildValue {
-    return new LppChildValue(
+  get(key: string): LppReference {
+    return new LppReference(
       this,
       key,
-      this.value.get(key) ?? LppConstant.init(null)
+      this.value.get(key) ?? new LppConstant(null)
     )
   }
   /**
@@ -93,9 +93,9 @@ export class LppClosure extends LppValue {
    * @param value Value to set.
    * @returns Value.
    */
-  set(key: string, value: LppValue): LppChildValue {
+  set(key: string, value: LppValue): LppReference {
     this.value.set(key, value)
-    return new LppChildValue(this, key, value)
+    return new LppReference(this, key, value)
   }
   /**
    * Detect whether a value exists.
@@ -156,7 +156,7 @@ export class LppContext {
    * @param name Variable name.
    * @returns Variable result.
    */
-  get(name: string): LppChildValue {
+  get(name: string): LppReference {
     if (this.closure.has(name)) return this.closure.get(name)
     else return this.parent ? this.parent.get(name) : this.closure.get(name)
   }

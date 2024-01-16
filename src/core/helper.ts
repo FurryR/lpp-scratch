@@ -1,6 +1,6 @@
 import {
   LppValue,
-  LppChildValue,
+  LppReference,
   LppConstant,
   LppArray,
   LppObject,
@@ -13,8 +13,8 @@ import {
  * @param obj Object.
  * @returns Ensured result.
  */
-export function ensureValue(obj: LppValue | LppChildValue): LppValue {
-  return obj instanceof LppChildValue ? obj.value : obj
+export function ensureValue(obj: LppValue | LppReference): LppValue {
+  return obj instanceof LppReference ? obj.value : obj
 }
 /**
  * As boolean.
@@ -79,12 +79,14 @@ export function mathOp(lhs: LppValue, op: string, rhs: LppValue): JSConstant {
 export function equal(lhs: LppValue, rhs: LppValue): boolean {
   lhs =
     lhs instanceof LppConstant && typeof lhs.value === 'boolean'
-      ? LppConstant.init(+lhs.value)
+      ? new LppConstant(+lhs.value)
       : lhs
   rhs =
     rhs instanceof LppConstant && typeof rhs.value === 'boolean'
-      ? LppConstant.init(+rhs.value)
+      ? new LppConstant(+rhs.value)
       : rhs
+  if (lhs instanceof LppConstant && rhs instanceof LppConstant)
+    return lhs.value === rhs.value // patch: compare by value when using LppConstant
   return lhs === rhs
 }
 /**
@@ -160,9 +162,9 @@ export function compare(lhs: LppValue, op: string, rhs: LppValue): boolean {
             throw new Error('lpp: Unknown lhs')
         }
       }
-      return compareInternal(fn, lhs, LppConstant.init(asBoolean(rhs)))
+      return compareInternal(fn, lhs, new LppConstant(asBoolean(rhs)))
     }
-    return compareInternal(fn, LppConstant.init(asBoolean(lhs)), rhs)
+    return compareInternal(fn, new LppConstant(asBoolean(lhs)), rhs)
   }
   const math: Map<string, <T extends number | string>(a: T, b: T) => boolean> =
     new Map([
@@ -174,4 +176,79 @@ export function compare(lhs: LppValue, op: string, rhs: LppValue): boolean {
   const fn = math.get(op)
   if (!fn) throw new Error('lpp: Not implemented')
   return compareInternal(fn, lhs, rhs)
+}
+/**
+ * Convert Lpp object to JavaScript object.
+ * @param value Object.
+ * @returns Return value.
+ */
+export function deserializeObject(value: LppValue): unknown {
+  const map = new WeakMap<LppValue, object>()
+  /**
+   * Convert Lpp object to JavaScript object.
+   * @param value Object.
+   * @returns Return value.
+   */
+  function deserializeInternal(value: LppValue): unknown {
+    if (value instanceof LppConstant) return value.value
+    if (value instanceof LppArray) {
+      const cache = map.get(value)
+      if (cache) return cache
+      const res = value.value.map(v => (v ? deserializeObject(v) : null))
+      map.set(value, res)
+      return res
+    }
+    if (value instanceof LppObject) {
+      const cache = map.get(value)
+      if (cache) return cache
+      const res: Record<string, unknown> = {}
+      for (const [k, v] of value.value.entries()) {
+        if (k === 'constructor') continue
+        res[k] = deserializeObject(v)
+      }
+      map.set(value, res)
+      return res
+    }
+    return null
+  }
+  return deserializeInternal(value)
+}
+/**
+ * Convert JavaScript object to Lpp object.
+ * @param value Object.
+ * @returns Return value.
+ */
+export function serializeObject(value: unknown): LppValue {
+  const map = new WeakMap<object, LppValue>()
+  /**
+   * Convert JavaScript object to Lpp object.
+   * @param value Object.
+   * @returns Return value.
+   */
+  function serializeInternal(value: unknown): LppValue {
+    if (value === null || value === undefined) return new LppConstant(null)
+    switch (typeof value) {
+      case 'string':
+      case 'number':
+      case 'boolean':
+        return new LppConstant(value)
+      case 'object': {
+        const v = map.get(value)
+        if (v) return v
+        if (value instanceof globalThis.Array) {
+          const res = new LppArray(value.map(value => serializeInternal(value)))
+          map.set(value, res)
+          return res
+        }
+        const obj = new LppObject()
+        for (const [k, v] of globalThis.Object.entries(value)) {
+          obj.set(k, serializeInternal(v))
+        }
+        map.set(value, obj)
+        return obj
+      }
+    }
+    return new LppConstant(null)
+  }
+  return serializeInternal(value)
 }

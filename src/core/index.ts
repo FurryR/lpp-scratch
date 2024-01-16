@@ -10,7 +10,7 @@ export {
 } from './context'
 export {
   LppArray,
-  LppChildValue,
+  LppReference,
   LppConstant,
   LppError,
   LppFunction,
@@ -18,4 +18,9 @@ export {
   LppPromise,
   LppValue
 } from './type'
-export { ensureValue, asBoolean } from './helper'
+export {
+  ensureValue,
+  asBoolean,
+  serializeObject,
+  deserializeObject
+} from './helper'
