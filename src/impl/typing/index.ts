@@ -56,6 +56,9 @@ export interface LppCompatibleRuntime extends VM.Runtime {
 export interface LppCompatibleThread extends VM.Thread {
   lpp?: LppContext
   isCompiled?: boolean
+  generator?: {
+    next(): unknown
+  }
   tryCompile?(): void
 }
 export interface LppCompatibleVM extends VM {
@@ -65,7 +68,6 @@ export interface LppCompatibleVM extends VM {
   >
 }
 export interface LppCompatibleBlocks extends VM.Blocks {
-  getNextBlock(id: string): string | null
   _cache: {
     _executeCached: Record<
       string,
@@ -80,9 +82,6 @@ export interface ThreadConstructor {
   new (id: string): VM.Thread
   STATUS_DONE: number
   STATUS_RUNNING: number
-}
-export interface SequencerConstructor {
-  new (runtime: VM.Runtime): VM.Sequencer
 }
 export interface BlocksConstructor {
   new (runtime: VM.Runtime, optNoGlow?: boolean /** = false */): VM.Blocks

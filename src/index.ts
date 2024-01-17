@@ -1,22 +1,6 @@
 /**
- * --- CAUTION ---
- * Warning! lpp does not support sandboxed mode. Please load it as unsandboxed extension.
- * 注意！lpp 不支持隔离模式，请将其作为非隔离扩展加载。
- * 注意！lpp 不支援隔離模式，請將其作爲非隔離擴張程式載入。
- * 注意！lpp はサンドボックスモードをサポートされていません。非サンドボックス拡張機能でロードしてください。
- * ちゅうい！lpp はサンドボックスモードをサポートされていません。ひサンドボックスかくちょうきのうでロードしてください。
- */
-// TODO: Move copyright information to tsup.config.ts
-/**
  * Copyright (c) 2023 凌.
  * This program is licensed under the MIT license.
- */
-/**
- * Staff:
- * Nights from CCW
- * FurryR belongs to VeroFess (https://github.com/VeroFess) from GitHub (https://github.com/FurryR)
- * Simon Shiki from GitHub (https://github.com/SimonShiki)
- * CST1229 from GitHub (https://github.com/CST1229)
  */
 
 import {
@@ -26,7 +10,6 @@ import {
   LppCompatibleThread,
   LppCompatibleVM,
   ScratchContext,
-  SequencerConstructor,
   TargetConstructor,
   ThreadConstructor
 } from './impl/typing'
@@ -244,19 +227,12 @@ declare let Scratch: ScratchContext
             const blocks = new Blocks(this.runtime, true)
             deserializeBlock(blocks, val.script)
             const fn = new LppFunction((self, args) => {
-              const { Thread, Target, Sequencer } = {
-                Thread: this.runtime.threads[0]
-                  .constructor as ThreadConstructor,
-                Target: this.runtime.targets[0]
-                  .constructor as TargetConstructor,
-                Sequencer: this.runtime.sequencer
-                  .constructor as SequencerConstructor
-              } // Thread, Target and Sequencer do exist because we need at least a target and thread in order to call generated function.
+              const Target = this.runtime.targets[0]
+                .constructor as TargetConstructor
               let resolveFn: ((v: LppReturnOrException) => void) | undefined
               let syncResult: LppReturnOrException | undefined
               const target = this.createDummyTarget(Target, blocks)
-              const thread = this.createThread(
-                Thread,
+              const thread = this.runtime._pushThread(
                 val.entry,
                 target
               ) as LppCompatibleThread
@@ -290,8 +266,7 @@ declare let Scratch: ScratchContext
                   new LppReturn(new LppConstant(null))
                 )
               })
-              const seq = new Sequencer(this.runtime)
-              seq.stepThread(thread)
+              this.stepThread(thread)
               return (
                 syncResult ??
                 new Promise<LppReturnOrException>(resolve => {
@@ -1068,11 +1043,7 @@ declare let Scratch: ScratchContext
       { thread, target }: VM.BlockUtility
     ): Wrapper<LppFunction> | void {
       try {
-        const { Thread, Target, Sequencer } = {
-          Thread: thread.constructor as ThreadConstructor,
-          Target: target.constructor as TargetConstructor,
-          Sequencer: this.runtime.sequencer.constructor as SequencerConstructor
-        }
+        const Target = target.constructor as TargetConstructor
         // runtime hack by @FurryR.
         if (this.shouldExit(thread)) {
           try {
@@ -1108,8 +1079,7 @@ declare let Scratch: ScratchContext
           if (!block.inputs.SUBSTACK)
             return new LppReturn(new LppConstant(null))
           const id = block.inputs.SUBSTACK.block
-          const thread = this.createThread(
-            Thread,
+          const thread = this.runtime._pushThread(
             id,
             target
           ) as LppCompatibleThread
@@ -1143,8 +1113,7 @@ declare let Scratch: ScratchContext
               new LppReturn(new LppConstant(null))
             )
           })
-          const seq = new Sequencer(this.runtime)
-          seq.stepThread(thread)
+          this.stepThread(thread)
           return (
             syncResult ??
             new Promise<LppReturnOrException>(resolve => {
@@ -1276,17 +1245,12 @@ declare let Scratch: ScratchContext
             return
           }
         }
-        const { Thread, Sequencer } = {
-          Thread: thread.constructor as ThreadConstructor,
-          Sequencer: this.runtime.sequencer.constructor as SequencerConstructor
-        }
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, thread)
         const id = block.inputs.SUBSTACK?.block
         if (!id) return
         const parentThread = thread as LppCompatibleThread
-        const scopeThread = this.createThread(
-          Thread,
+        const scopeThread = this.runtime._pushThread(
           id,
           target
         ) as LppCompatibleThread
@@ -1319,8 +1283,7 @@ declare let Scratch: ScratchContext
           if (resolveFn) resolveFn()
           else resolved = true
         })
-        const seq = new Sequencer(this.runtime)
-        seq.stepThread(scopeThread)
+        this.stepThread(scopeThread)
         if (resolved) return
         return new Promise<void>(resolve => {
           resolveFn = resolve
@@ -1347,10 +1310,6 @@ declare let Scratch: ScratchContext
             return
           }
         }
-        const { Thread, Sequencer } = {
-          Thread: thread.constructor as ThreadConstructor,
-          Sequencer: this.runtime.sequencer.constructor as SequencerConstructor
-        }
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, thread)
         const dest = Wrapper.unwrap(args.var)
@@ -1359,8 +1318,7 @@ declare let Scratch: ScratchContext
         if (!id) return
         const captureId = block.inputs.SUBSTACK_2?.block
         const parentThread = thread as LppCompatibleThread
-        const tryThread = this.createThread(
-          Thread,
+        const tryThread = this.runtime._pushThread(
           id,
           target
         ) as LppCompatibleThread
@@ -1393,8 +1351,7 @@ declare let Scratch: ScratchContext
               error.set('stack', traceback)
             }
             dest.assign(error)
-            const catchThread = this.createThread(
-              Thread,
+            const catchThread = this.runtime._pushThread(
               captureId,
               target
             ) as LppCompatibleThread
@@ -1425,8 +1382,7 @@ declare let Scratch: ScratchContext
               if (resolveFn) resolveFn()
               else resolved = true
             })
-            const seq = new Sequencer(this.runtime)
-            seq.stepThread(catchThread)
+            this.stepThread(catchThread)
           }
         )
         this.bindThread(tryThread, () => {
@@ -1435,8 +1391,7 @@ declare let Scratch: ScratchContext
             else resolved = true
           }
         })
-        const seq = new Sequencer(this.runtime)
-        seq.stepThread(tryThread)
+        this.stepThread(tryThread)
         if (resolved) return
         return new Promise(resolve => {
           resolveFn = resolve
@@ -1492,25 +1447,6 @@ declare let Scratch: ScratchContext
       throw new Error('lpp: Uncaught Lpp exception')
     }
     /**
-     * Create a new thread (without compiling).
-     * @param id Top block id.
-     * @param target Thread target.
-     * @returns Thread instance.
-     */
-    private createThread(
-      threadConstructor: ThreadConstructor,
-      id: string,
-      target: VM.Target
-    ): VM.Thread {
-      const thread = new threadConstructor(id)
-      thread.target = target
-      thread.blockContainer = target.blocks
-      thread.pushStack(id)
-      this.runtime.threads.push(thread)
-      // this.runtime.threadMap?.set(thread.getId(), thread)
-      return thread
-    }
-    /**
      * Bind fn to thread. Fn will be called when the thread exits.
      * @param thread Thread object.
      * @param fn Dedicated function.
@@ -1518,7 +1454,6 @@ declare let Scratch: ScratchContext
     private bindThread(thread: LppCompatibleThread, fn: () => void) {
       // Call callback (if exists) when the thread is finished.
       let status = thread.status
-      let flag = false
       let alreadyCalled = false
       const threadConstructor = thread.constructor as ThreadConstructor
       Reflect.defineProperty(thread, 'status', {
@@ -1532,21 +1467,6 @@ declare let Scratch: ScratchContext
               alreadyCalled = true
               fn()
             }
-          } else if (status === threadConstructor.STATUS_RUNNING && !flag) {
-            // Lazy compilation in order to step thread immediately.
-            if (
-              thread.peekStack() &&
-              !thread.isCompiled &&
-              this.runtime.compilerOptions?.enabled
-            ) {
-              const container = thread.blockContainer as LppCompatibleBlocks
-              const nextBlock = container.getNextBlock(thread.topBlock)
-              if (nextBlock) {
-                thread.topBlock = nextBlock
-                if (thread.tryCompile) thread.tryCompile()
-              }
-            }
-            flag = true
           }
         }
       })
@@ -1707,6 +1627,29 @@ declare let Scratch: ScratchContext
         entry
       }
       return new LppReturn(serializeObject(info))
+    }
+    /**
+     * Method for compiler to fix globalState.
+     * @param seq Sequencer.
+     * @param thread Thread instance.
+     */
+    private stepThread(thread: LppCompatibleThread) {
+      const callerThread = this.runtime.sequencer
+        .activeThread as LppCompatibleThread
+      this.runtime.sequencer.stepThread(thread)
+      if (
+        thread.isCompiled &&
+        callerThread &&
+        callerThread.isCompiled &&
+        callerThread.generator
+      ) {
+        const orig = callerThread.generator
+        callerThread.generator = {
+          next: () => {}
+        }
+        this.runtime.sequencer.stepThread(callerThread) // restore globalState.
+        callerThread.generator = orig
+      }
     }
   }
   if (Scratch.vm?.runtime) {
