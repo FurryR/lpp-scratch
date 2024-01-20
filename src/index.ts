@@ -88,10 +88,6 @@ declare let Scratch: ScratchContext
      */
     initalized: boolean
     /**
-     * Whether the extension is running on early Scratch versions.
-     */
-    isEarlyScratch: boolean
-    /**
      * Shared isMutatorClick state.
      */
     mutatorClick: boolean
@@ -178,10 +174,6 @@ declare let Scratch: ScratchContext
           _emit as (this: VM.Runtime, event: string, ...args: unknown[]) => void
         ).call(this.runtime, event, ...args)
       }
-      // Patch for early Scratch 3 versions (before commit 39b18fe by @mzgoddard, Apr 12, 2019).
-      if (!('activeThread' in this.runtime.sequencer)) {
-        this.isEarlyScratch = true
-      } else this.isEarlyScratch = false
       // Patch Function.
       Global.Function.set(
         'serialize',
@@ -1603,20 +1595,6 @@ declare let Scratch: ScratchContext
           }
         }
       })
-      // TODO: detect pushStack?
-      if (this.isEarlyScratch) {
-        /**
-         * Patched pushStack().
-         * @param blockId
-         */
-        thread.pushStack = blockId => {
-          if (!blockId && !alreadyCalled) {
-            alreadyCalled = true
-            fn()
-          }
-          return threadConstructor.prototype.pushStack.call(thread, blockId)
-        }
-      }
     }
     /**
      * Process return value.
