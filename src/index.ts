@@ -238,7 +238,13 @@ declare let Scratch: ScratchContext
               const fn = new LppFunction(() => {
                 return new LppReturn(new LppConstant(null))
               })
-              Serialization.attachMetadata(fn, undefined, undefined, undefined, val.signature)
+              Serialization.attachMetadata(
+                fn,
+                undefined,
+                undefined,
+                undefined,
+                val.signature
+              )
               return new LppReturn(fn)
             }
             const Blocks = this.runtime.flyoutBlocks
@@ -296,7 +302,13 @@ declare let Scratch: ScratchContext
                 })
               )
             })
-            Serialization.attachMetadata(fn, undefined, blocks, val.block, val.signature)
+            Serialization.attachMetadata(
+              fn,
+              undefined,
+              blocks,
+              val.block,
+              val.signature
+            )
             return new LppReturn(fn)
           }
           const res = Global.SyntaxError.construct([
@@ -1760,7 +1772,10 @@ declare let Scratch: ScratchContext
         })
       const info: Serialization.SerializationInfo = {
         signature,
-        script: Serialization.serializeBlock(blocks as LppCompatibleBlocks, block),
+        script: Serialization.serializeBlock(
+          blocks as LppCompatibleBlocks,
+          block
+        ),
         block: block.id
       }
       return serializeObject(info)
