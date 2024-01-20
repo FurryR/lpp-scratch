@@ -1,4 +1,5 @@
 import type VM from 'scratch-vm'
+import { LppFunction } from 'src/core'
 export interface SerializationInfo {
   /**
    * Function signature.
@@ -9,26 +10,62 @@ export interface SerializationInfo {
    */
   script: Record<string, VM.Block>
   /**
-   * Function entry point.
+   * Function ID.
    */
-  entry: string
+  block: string | null
 }
-// export function serializeBlock(
-//   container: VM.Blocks,
-//   block: VM.Block
-// ): Record<string, VM.Block> {
-//   const v: Record<string, VM.Block> = {}
-//   v[block.id] = block
-//   for (const v of Object.values(block.inputs)) {
-//     const subBlock = container.getBlock(v.block)
-//     if (subBlock) Object.assign(v, serializeBlock(container, subBlock))
-//   }
-//   if (block.next) {
-//     const nextBlock = container.getBlock(block.next)
-//     if (nextBlock) Object.assign(v, serializeBlock(container, nextBlock))
-//   }
-//   return v
-// }
+export interface SerializeMetadata extends LppFunction {
+  /**
+   * Target ID.
+   */
+  target?: string
+  /**
+   * Runtime blocks instance (for serialize/deserialize).
+   */
+  blocks?: VM.Blocks
+  /**
+   * Block ID (refers to lpp_constructFunction).
+   */
+  block?: string
+  /**
+   * Function's signature.
+   */
+  signature: string[]
+  /**
+   * Is type hint only?
+   * If true, the function is not serializable.
+   */
+  isTypehint: boolean
+}
+export function attachMetadata(
+  originalFn: LppFunction,
+  target: string | undefined,
+  blocks: VM.Blocks | undefined,
+  block: string | undefined,
+  signature: string[]
+) {
+  const v = originalFn as SerializeMetadata
+  v.target = target
+  v.blocks = blocks
+  v.block = block
+  v.signature = signature
+  v.isTypehint = false
+}
+export function attachTypehint(originalFn: LppFunction, signature: string[]) {
+  const v = originalFn as SerializeMetadata
+  v.signature = signature
+  v.isTypehint = true
+}
+export function hasMetadata(fn: LppFunction): fn is SerializeMetadata {
+  const v = fn as SerializeMetadata
+  return (
+    (v.block === undefined || typeof v.block === 'string') &&
+    (v.target === undefined || typeof v.target === 'string') &&
+    v.signature instanceof Array &&
+    v.signature.every(v => typeof v === 'string') &&
+    typeof v.isTypehint === 'boolean'
+  )
+}
 export function serializeBlock(
   container: VM.Blocks,
   block: VM.Block
@@ -114,11 +151,7 @@ export namespace Validator {
       !Object.values(v.fields).every(v => isField(v))
     )
       return false
-    if (
-      v.mutation !== undefined &&
-      (!(v.mutation instanceof Object) ||
-        !Object.values(v.mutation).every(v => typeof v === 'string'))
-    )
+    if (v.mutation !== undefined && !(v.mutation instanceof Object))
       return false
     return true
   }
@@ -137,7 +170,11 @@ export namespace Validator {
       )
     )
       return false
-    if (typeof v.entry !== 'string' || !(v.entry in v.script)) return false
+    if (
+      v.block !== null &&
+      (typeof v.block !== 'string' || !(v.block in v.script))
+    )
+      return false
     return true
   }
 }

@@ -4,6 +4,7 @@ import { LppCompatibleBlockly } from '../blockly/definition'
 import * as Dialog from './dialog'
 import type ScratchBlocks from 'blockly/core'
 import { LppTraceback } from '../context'
+import { Inspector } from './inspector'
 let lastNotification: Notification | undefined
 /**
  * Warn by notification.
@@ -105,54 +106,63 @@ export function showTraceback(svgRoot: SVGAElement) {
 /**
  * Warn syntax errors with specified ID.
  * @param Blockly Scratch Blockly instance.
+ * @param vm VM instance.
  * @param error Error ID.
  * @param id Block ID.
+ * @param target Target ID.
  */
 export function warnError(
   Blockly: LppCompatibleBlockly | undefined,
+  vm: VM,
   formatMessage: (id: string) => string,
   error: string,
-  id: string
+  id: string,
+  target: string
 ) {
   if (Blockly) {
+    if (
+      vm.runtime.getEditingTarget()?.id !== target &&
+      vm.runtime.getTargetById(target)
+    ) {
+      vm.setEditingTarget(target)
+    }
     const workspace = Blockly.getMainWorkspace() as ScratchBlocks.WorkspaceSvg
     workspace.centerOnBlock(id, true)
-    const HelpIcon = (): HTMLSpanElement => {
-      let state = false
-      let original = ''
-      const icon = document.createElement('span')
-      icon.classList.add('lpp-traceback-icon')
-      icon.textContent = '❓'
-      icon.title = formatMessage('lpp.tooltip.button.help.more')
-      icon.addEventListener('click', () => {
-        if (div) {
-          const v = div.getElementsByClassName('lpp-hint')[0]
-          if (v) {
-            if (state) {
-              v.textContent = original
-              icon.textContent = '❓'
-              icon.title = formatMessage('lpp.tooltip.button.help.more')
-            } else {
-              original = v.textContent ?? ''
-              icon.textContent = '➖'
-              v.textContent = `💡 ${formatMessage(`lpp.error.${error}.detail`)}`
-              icon.title = formatMessage('lpp.tooltip.button.help.less')
+    let original = ''
+    const div: HTMLDivElement | undefined = Dialog.show(
+      Blockly,
+      id,
+      [
+        Dialog.IconGroup([
+          Dialog.HelpIcon(
+            formatMessage('lpp.tooltip.button.help.more'),
+            formatMessage('lpp.tooltip.button.help.less'),
+            () => {
+              if (div) {
+                const v = div.getElementsByClassName('lpp-hint')[0]
+                if (v) {
+                  original = v.textContent ?? ''
+                  v.textContent = `💡 ${formatMessage(`lpp.error.${error}.detail`)}`
+                }
+              }
+            },
+            () => {
+              if (div) {
+                const v = div.getElementsByClassName('lpp-hint')[0]
+                if (v) {
+                  v.textContent = original
+                }
+              }
             }
-            state = !state
-          }
-        }
-      })
-      return icon
-    }
-    const div: HTMLDivElement | undefined = Dialog.make(Blockly, id, [
-      Dialog.IconGroup([
-        HelpIcon(),
-        Dialog.CloseIcon(Blockly, formatMessage('lpp.tooltip.button.close'))
-      ]),
-      Dialog.Title(`ℹ️ ${formatMessage(`lpp.error.${error}.summary`)}`),
-      document.createElement('br'),
-      Dialog.Text(`🔍 ${formatMessage('lpp.error.hint')}`, 'lpp-hint')
-    ])
+          ),
+          Dialog.CloseIcon(Blockly, formatMessage('lpp.tooltip.button.close'))
+        ]),
+        Dialog.Title(`ℹ️ ${formatMessage(`lpp.error.${error}.summary`)}`),
+        document.createElement('br'),
+        Dialog.Text(`🔍 ${formatMessage('lpp.error.hint')}`, 'lpp-hint')
+      ],
+      'left'
+    )
     if (!div) {
       notificationAlert({
         title: `❌ ${formatMessage(`lpp.error.${error}.summary`)}`,
@@ -197,100 +207,114 @@ export function warnError(
 /**
  * Warn exception.
  * @param Blockly Blockly global instance.
+ * @param vm VM instance.
  * @param formatMessage formatMessage.
  * @param exception Exception instance.
  */
 export function warnException(
   Blockly: LppCompatibleBlockly | undefined,
-  _runtime: VM.Runtime,
+  vm: VM,
   formatMessage: (id: string) => string,
   exception: LppException
 ) {
-  function getTraceback(): (Node | string)[] {
-    const text: (Node | string)[] = []
-    text.push(
-      `💡 ${formatMessage(`lpp.error.uncaughtException.detail`)}`,
-      document.createElement('br'),
-      document.createElement('br')
-    )
-    text.push(`👾 ${formatMessage('lpp.error.uncaughtException.traceback')}`)
-    const list = document.createElement('ul')
-    list.classList.add('lpp-traceback-list')
-    for (const [index, value] of exception.stack.entries()) {
-      const li = document.createElement('li')
-      const traceback = document.createElement('span')
-      traceback.classList.add('lpp-traceback-stack')
-      if (Blockly && value instanceof LppTraceback.Block) {
-        const workspace =
-          Blockly.getMainWorkspace() as ScratchBlocks.WorkspaceSvg
-        if (workspace.getBlockById(value.block)) {
-          traceback.classList.add('lpp-traceback-stack-enabled')
-          traceback.title = formatMessage(
-            'lpp.tooltip.button.scrollToBlockEnabled'
-          )
-          traceback.addEventListener('click', () => {
-            workspace.centerOnBlock(value.block, true)
-          })
-        } else {
-          traceback.classList.add('lpp-traceback-stack-disabled')
-          traceback.title = formatMessage(
-            'lpp.tooltip.button.scrollToBlockDisabled'
-          )
-        }
-      } else if (value instanceof LppTraceback.NativeFn) {
-        traceback.title = formatMessage('lpp.tooltip.button.nativeFn')
-      }
-      traceback.textContent = value.toString()
-      li.append(`📌 ${index} ➡️ `, traceback)
-      list.append(li)
-    }
-    text.push(list)
-    return text
-  }
   if (Blockly) {
+    const getTraceback = (): (Node | string)[] => {
+      const text: (Node | string)[] = []
+      text.push(
+        `💡 ${formatMessage(`lpp.error.uncaughtException.detail`)}`,
+        document.createElement('br'),
+        document.createElement('br')
+      )
+      text.push(
+        `🤔 ${formatMessage('lpp.error.uncaughtException.exception')}`,
+        document.createElement('br'),
+        Inspector(Blockly, vm, formatMessage, exception.value), // TODO: Object view
+        document.createElement('br')
+      )
+      text.push(`👾 ${formatMessage('lpp.error.uncaughtException.traceback')}`)
+      const list = document.createElement('ul')
+      list.classList.add('lpp-list')
+      for (const [index, value] of exception.stack.entries()) {
+        const li = document.createElement('li')
+        const traceback = document.createElement('span')
+        traceback.classList.add('lpp-code')
+        if (Blockly && value instanceof LppTraceback.Block) {
+          if (vm.runtime.getTargetById(value.target)) {
+            const workspace =
+              Blockly.getMainWorkspace() as ScratchBlocks.WorkspaceSvg
+            traceback.classList.add('lpp-traceback-stack-enabled')
+            traceback.title = formatMessage(
+              'lpp.tooltip.button.scrollToBlockEnabled'
+            )
+            traceback.addEventListener('click', () => {
+              const box =
+                Blockly.DropDownDiv.getContentDiv().getElementsByClassName(
+                  'valueReportBox'
+                )[0]
+              vm.setEditingTarget(value.target)
+              workspace.centerOnBlock(value.block, true)
+              Blockly.DropDownDiv.hideWithoutAnimation()
+              Blockly.DropDownDiv.clearContent()
+              Blockly.DropDownDiv.getContentDiv().append(box)
+              Blockly.DropDownDiv.showPositionedByBlock(
+                workspace as unknown as ScratchBlocks.Field<unknown>,
+                workspace.getBlockById(value.block) as ScratchBlocks.BlockSvg
+              )
+            })
+          } else {
+            traceback.classList.add('lpp-traceback-stack-disabled')
+            traceback.title = formatMessage(
+              'lpp.tooltip.button.scrollToBlockDisabled'
+            )
+          }
+        } else if (value instanceof LppTraceback.NativeFn) {
+          traceback.title = formatMessage('lpp.tooltip.button.nativeFn')
+        }
+        traceback.textContent = value.toString()
+        li.append(`📌 ${index} ➡️ `, traceback)
+        list.append(li)
+      }
+      text.push(list)
+      return text
+    }
     let flag = false
     for (const stack of exception.stack.toReversed()) {
       if (
         stack instanceof LppTraceback.Block &&
-        Blockly.getMainWorkspace().getBlockById(stack.block)
+        vm.runtime.getTargetById(stack.target)
       ) {
+        vm.setEditingTarget(stack.target)
         const workspace =
           Blockly.getMainWorkspace() as ScratchBlocks.WorkspaceSvg
         workspace.centerOnBlock(stack.block, true)
-        const HelpIcon = (): HTMLSpanElement => {
-          let state = false
-          let original = ''
-          const icon = document.createElement('span')
-          icon.classList.add('lpp-traceback-icon')
-          icon.textContent = '❓'
-          icon.title = formatMessage('lpp.tooltip.button.help.more')
-          icon.addEventListener('click', () => {
-            if (div) {
-              const v = div.getElementsByClassName('lpp-hint')[0]
-              if (v) {
-                if (state) {
-                  v.textContent = original
-                  icon.textContent = '❓'
-                  icon.title = formatMessage('lpp.tooltip.button.help.more')
-                } else {
-                  original = v.textContent ?? ''
-                  icon.textContent = '➖'
-                  while (v.firstChild) v.removeChild(v.firstChild)
-                  v.append(...getTraceback())
-                  icon.title = formatMessage('lpp.tooltip.button.help.less')
-                }
-                state = !state
-              }
-            }
-          })
-          return icon
-        }
-        const div: HTMLDivElement | undefined = Dialog.make(
+        let original = ''
+        const div: HTMLDivElement | undefined = Dialog.show(
           Blockly,
           stack.block,
           [
             Dialog.IconGroup([
-              HelpIcon(),
+              Dialog.HelpIcon(
+                formatMessage('lpp.tooltip.button.help.more'),
+                formatMessage('lpp.tooltip.button.help.less'),
+                () => {
+                  if (div) {
+                    const v = div.getElementsByClassName('lpp-hint')[0]
+                    if (v) {
+                      original = v.textContent ?? ''
+                      while (v.firstChild) v.removeChild(v.firstChild)
+                      v.append(...getTraceback())
+                    }
+                  }
+                },
+                () => {
+                  if (div) {
+                    const v = div.getElementsByClassName('lpp-hint')[0]
+                    if (v) {
+                      v.textContent = original
+                    }
+                  }
+                }
+              ),
               Dialog.CloseIcon(
                 Blockly,
                 formatMessage('lpp.tooltip.button.close')
@@ -301,7 +325,8 @@ export function warnException(
             ),
             document.createElement('br'),
             Dialog.Text(`🔍 ${formatMessage('lpp.error.hint')}`, 'lpp-hint')
-          ]
+          ],
+          'left'
         )
         flag = !!div
         break
@@ -371,13 +396,19 @@ export function warnException(
   console.groupEnd()
   console.groupEnd()
 }
+
 Dialog.globalStyle.textContent += `
-.lpp-traceback-list {
-  padding: 0;
+.lpp-list {
   list-style-type: disc;
-  margin-left: 20px;
+  padding: 0;
+  margin-left: 19.5px;
+  margin-top: 5px;
+  margin-bottom: 0;
 }
-.lpp-traceback-stack {
+.lpp-list li {
+  margin-bottom: 5px;
+}
+.lpp-code {
   font-family: "Source Code Pro", "Fira Code", "DejaVu Sans Mono", "Cascadia Code", "Jetbrains Mono", "Lucida Console", Consolas, monospace;
 }
 .lpp-traceback-stack-enabled {
@@ -389,9 +420,12 @@ Dialog.globalStyle.textContent += `
 .lpp-traceback-stack-enabled:hover {
   cursor: pointer;
   color: gray;
+  user-select: text;
 }
 .lpp-traceback-stack-disabled:hover {
   cursor: not-allowed;
   color: red;
+  user-select: text;
 }
 `
+export { Dialog, Inspector }

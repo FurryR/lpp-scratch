@@ -113,7 +113,7 @@ export const locale = {
     'lpp.tooltip.button.help.less': 'Hide detail.',
     'lpp.tooltip.button.scrollToBlockEnabled': 'Scroll to this block.',
     'lpp.tooltip.button.scrollToBlockDisabled':
-      'Unable to find this block in Blockly workspace.',
+      'Unable to find this block in project.',
     'lpp.tooltip.button.nativeFn':
       'This is native function. For further information please check DevTools Console.',
     // About
@@ -221,8 +221,7 @@ export const locale = {
     'lpp.tooltip.button.help.more': '显示详细信息。',
     'lpp.tooltip.button.help.less': '隐藏详细信息。',
     'lpp.tooltip.button.scrollToBlockEnabled': '转到这个积木。',
-    'lpp.tooltip.button.scrollToBlockDisabled':
-      '无法在 Blockly 工作区中找到此积木。',
+    'lpp.tooltip.button.scrollToBlockDisabled': '无法在项目中找到此积木。',
     'lpp.tooltip.button.nativeFn':
       '这是原生函数。详细内容在 DevTools Console 内。',
     // 关于

@@ -1,4 +1,4 @@
-export { Global, global } from './builtin'
+export { Global, global } from './global'
 export {
   LppClosure,
   LppTraceback,

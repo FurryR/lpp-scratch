@@ -1,5 +1,5 @@
 import type * as ScratchBlocks from 'blockly/core'
-type BlocklyInstance = typeof ScratchBlocks
+export type BlocklyInstance = typeof ScratchBlocks
 import type VM from 'scratch-vm'
 export interface LppCompatibleBlock extends ScratchBlocks.BlockSvg {
   plus?(): void

@@ -1,10 +1,11 @@
 import type ScratchBlocks from 'blockly/core'
 import { LppCompatibleBlockly } from '../blockly/definition'
 
-export function make(
+export function show(
   Blockly: LppCompatibleBlockly,
   id: string,
-  value: (string | Node)[]
+  value: (string | Node)[],
+  textAlign: string
 ): HTMLDivElement | undefined {
   const workspace = Blockly.getMainWorkspace() as ScratchBlocks.WorkspaceSvg
   const block = workspace.getBlockById(id) as ScratchBlocks.BlockSvg | null
@@ -14,9 +15,13 @@ export function make(
   const contentDiv = Blockly.DropDownDiv.getContentDiv(),
     elem = document.createElement('div')
   elem.setAttribute('class', 'valueReportBox')
-  elem.style.overflowX = 'hidden'
+  // elem.style.overflowX = 'scroll'
   elem.append(...value)
-  elem.style.textAlign = 'left'
+  elem.style.minWidth = 'none'
+  elem.style.minHeight = 'none'
+  elem.style.maxWidth = 'none'
+  elem.style.maxHeight = 'none'
+  elem.style.textAlign = textAlign
   elem.style.userSelect = 'none'
   contentDiv.appendChild(elem)
   Blockly.DropDownDiv.setColour(
@@ -44,8 +49,33 @@ export function CloseIcon(
   icon.addEventListener('click', () => {
     Blockly.DropDownDiv.hide()
   })
-  icon.title = title
+  icon.title = `❌ ${title}`
   icon.textContent = '❌'
+  return icon
+}
+export function HelpIcon(
+  title: string,
+  closeTitle: string,
+  onOpen: () => void,
+  onClose: () => void
+) {
+  let state = false
+  const icon = document.createElement('span')
+  icon.classList.add('lpp-traceback-icon')
+  icon.textContent = '❓'
+  icon.title = `❓ ${title}`
+  icon.addEventListener('click', () => {
+    if (state) {
+      icon.textContent = '❓'
+      icon.title = `❓ ${title}`
+      onClose()
+    } else {
+      icon.textContent = '➖'
+      icon.title = `➖ ${closeTitle}`
+      onOpen()
+    }
+    state = !state
+  })
   return icon
 }
 export function Title(value: string): HTMLDivElement {
@@ -53,7 +83,8 @@ export function Title(value: string): HTMLDivElement {
   text.style.textAlign = 'left'
   text.style.whiteSpace = 'nowrap'
   text.style.overflow = 'hidden'
-  text.textContent = value
+  text.style.textOverflow = 'ellipsis'
+  text.title = text.textContent = value
   return text
 }
 export function Text(value: string, className?: string): HTMLSpanElement {

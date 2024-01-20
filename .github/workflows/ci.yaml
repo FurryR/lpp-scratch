@@ -29,10 +29,17 @@ jobs:
           cache: 'npm'
       - name: 🔽 Install dependencies
         run: npm ci
-      - name: 🛠️ Build lpp
-        run: npm run build --if-present
-      - name: ✅ Upload artifacts
+      - name: 🛠️ Build lpp (debug)
+        run: npm run dev --if-present
+      - name: ✅ Upload debug artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: lpp.min.js
+          name: lpp-debug
+          path: dist/index.global.js
+      - name: 🛠️ Build lpp (release)
+        run: npm run build --if-present
+      - name: ✅ Upload release artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: lpp-release
           path: dist/index.global.js

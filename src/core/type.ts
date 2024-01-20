@@ -5,7 +5,7 @@ import {
   LppException
 } from './context'
 
-import { global } from './builtin'
+import { global } from './global'
 import { asBoolean, compare, ensureValue, equal, mathOp } from './helper'
 export class LppError extends Error {
   /**
@@ -22,6 +22,7 @@ export class LppError extends Error {
   }
 }
 export type LppBinaryOperator =
+  | '='
   | '+'
   | '*'
   | '=='
@@ -31,6 +32,7 @@ export type LppBinaryOperator =
   | '>='
   | '<='
   | '&&'
+  | '||'
   | '-'
   | '/'
   | '%'
@@ -41,7 +43,7 @@ export type LppBinaryOperator =
   | '|'
   | '^'
   | 'instanceof'
-export type LppUnaryOperator = '+' | '-' | '!' | '~'
+export type LppUnaryOperator = '+' | '-' | '!' | '~' | 'delete'
 /**
  * Lpp compatible object.
  */
@@ -83,22 +85,14 @@ export abstract class LppValue {
    */
   abstract toString(): string
   /**
-   * Do binary arithmetic operations.
+   * Do arithmetic operations.
    * @param op Binary operator.
    * @param rhs Right hand side of the operation.
    */
-  abstract calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppReference
-  /**
-   * Do unary arithmetic operations.
-   * @param op Unary operator.
-   */
-  abstract calc(op: LppUnaryOperator): LppValue | LppReference
-  /**
-   * Fallback action for invalid operators.
-   * @param op Invalid operator.
-   * @param rhs Right hand side of the operation.
-   */
-  abstract calc(op: string, rhs?: LppValue): never
+  abstract calc(
+    op: LppBinaryOperator | LppUnaryOperator,
+    rhs?: LppValue
+  ): LppValue | LppReference
 }
 /**
  * Lpp compatible object (with scope).
@@ -172,23 +166,14 @@ export class LppReference implements LppValue {
     return this.value.toString()
   }
   /**
-   * Do binary arithmetic operations.
+   * Do arithmetic operations.
    * @param op Binary operator.
    * @param rhs Right hand side of the operation.
    */
-  calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppReference
-  /**
-   * Do unary arithmetic operations.
-   * @param op Unary operator.
-   */
-  calc(op: LppUnaryOperator): LppValue | LppReference
-  /**
-   * Fallback action for invalid operators.
-   * @param op Invalid operator.
-   * @param rhs Right hand side of the operation.
-   */
-  calc(op: string): never
-  calc(op: string, rhs?: LppValue): LppValue | LppReference {
+  calc(
+    op: LppBinaryOperator | LppUnaryOperator,
+    rhs?: LppValue
+  ): LppValue | LppReference {
     if (op === '=' && rhs) {
       return this.assign(rhs)
     } else if (op === 'delete' && !rhs) {
@@ -379,23 +364,11 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
     return `${this.value}`
   }
   /**
-   * Do binary arithmetic operations.
+   * Do arithmetic operations.
    * @param op Binary operator.
    * @param rhs Right hand side of the operation.
    */
-  calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppReference
-  /**
-   * Do unary arithmetic operations.
-   * @param op Unary operator.
-   */
-  calc(op: LppUnaryOperator): LppValue | LppReference
-  /**
-   * Fallback action for invalid operators.
-   * @param op Invalid operator.
-   * @param rhs Right hand side of the operation.
-   */
-  calc(op: string): never
-  calc(op: string, rhs?: LppValue): LppValue | LppReference {
+  calc(op: LppBinaryOperator | LppUnaryOperator, rhs?: LppValue): LppValue {
     if (rhs) {
       switch (op) {
         case '=': {
@@ -493,6 +466,9 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
       }
     } else {
       switch (op) {
+        case 'delete': {
+          throw new LppError('assignOfConstant')
+        }
         case '+': {
           if (
             !(
@@ -637,23 +613,11 @@ export class LppObject extends LppValue {
     return '<Lpp Object>'
   }
   /**
-   * Do binary arithmetic operations.
+   * Do arithmetic operations.
    * @param op Binary operator.
    * @param rhs Right hand side of the operation.
    */
-  calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppReference
-  /**
-   * Do unary arithmetic operations.
-   * @param op Unary operator.
-   */
-  calc(op: LppUnaryOperator): LppValue | LppReference
-  /**
-   * Fallback action for invalid operators.
-   * @param op Invalid operator.
-   * @param rhs Right hand side of the operation.
-   */
-  calc(op: string): never
-  calc(op: string, rhs?: LppValue): LppValue | LppReference {
+  calc(op: LppBinaryOperator | LppUnaryOperator, rhs?: LppValue): LppValue {
     if (rhs) {
       switch (op) {
         case '=': {
@@ -719,6 +683,9 @@ export class LppObject extends LppValue {
       }
     } else {
       switch (op) {
+        case 'delete': {
+          throw new LppError('assignOfConstant')
+        }
         case '!': {
           return new LppConstant(!asBoolean(this))
         }
@@ -839,23 +806,11 @@ export class LppArray extends LppValue {
     return '<Lpp Array>'
   }
   /**
-   * Do binary arithmetic operations.
+   * Do arithmetic operations.
    * @param op Binary operator.
    * @param rhs Right hand side of the operation.
    */
-  calc(op: LppBinaryOperator, rhs: LppValue): LppValue | LppReference
-  /**
-   * Do unary arithmetic operations.
-   * @param op Unary operator.
-   */
-  calc(op: LppUnaryOperator): LppValue | LppReference
-  /**
-   * Fallback action for invalid operators.
-   * @param op Invalid operator.
-   * @param rhs Right hand side of the operation.
-   */
-  calc(op: string): never
-  calc(op: string, rhs?: LppValue): LppValue | LppReference {
+  calc(op: LppBinaryOperator | LppUnaryOperator, rhs?: LppValue): LppValue {
     if (rhs) {
       switch (op) {
         case '=': {
@@ -922,6 +877,9 @@ export class LppArray extends LppValue {
       }
     } else {
       switch (op) {
+        case 'delete': {
+          throw new LppError('assignOfConstant')
+        }
         case '!': {
           return new LppConstant(!asBoolean(this))
         }

@@ -9,6 +9,10 @@ export namespace LppTraceback {
      * @param context Context.
      */
     constructor(
+      /**
+       * Target ID.
+       */
+      public target: string,
       /** Block ID. */
       public block: string,
       /** Context. */
