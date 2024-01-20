@@ -67,7 +67,7 @@ export function mathOp(lhs: LppValue, op: string, rhs: LppValue): JSConstant {
     ['^', (a, b) => a ^ b]
   ])
   const fn = math.get(op)
-  if (!fn) throw new Error('lpp: Not implemented')
+  if (!fn) throw new Error('lpp: not implemented')
   return fn(left, right)
 }
 /**
@@ -125,7 +125,7 @@ export function compare(lhs: LppValue, op: string, rhs: LppValue): boolean {
                 return fn(+lhs.value, rhs.value.length ? 1 : 0)
               }
               default:
-                throw new Error('lpp: Unknown rhs')
+                throw new Error('lpp: unknown rhs')
             }
           }
           case 'number': {
@@ -140,7 +140,7 @@ export function compare(lhs: LppValue, op: string, rhs: LppValue): boolean {
                 return fn(lhs.value ? 1 : 0, rhs.value.length ? 1 : 0)
               }
               default:
-                throw new Error('lpp: Unknown rhs')
+                throw new Error('lpp: unknown rhs')
             }
           }
           case 'string': {
@@ -155,11 +155,11 @@ export function compare(lhs: LppValue, op: string, rhs: LppValue): boolean {
                 return fn(lhs.value, rhs.value)
               }
               default:
-                throw new Error('lpp: Unknown rhs')
+                throw new Error('lpp: unknown rhs')
             }
           }
           default:
-            throw new Error('lpp: Unknown lhs')
+            throw new Error('lpp: unknown lhs')
         }
       }
       return compareInternal(fn, lhs, new LppConstant(asBoolean(rhs)))
@@ -174,7 +174,7 @@ export function compare(lhs: LppValue, op: string, rhs: LppValue): boolean {
       ['<=', (a, b) => a <= b]
     ])
   const fn = math.get(op)
-  if (!fn) throw new Error('lpp: Not implemented')
+  if (!fn) throw new Error('lpp: not implemented')
   return compareInternal(fn, lhs, rhs)
 }
 /**

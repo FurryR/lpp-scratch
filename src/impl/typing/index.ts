@@ -1,6 +1,6 @@
 import type VM from 'scratch-vm'
 import type { Message } from 'format-message'
-import {
+import type {
   LppArray,
   LppReference,
   LppConstant,
@@ -13,6 +13,7 @@ import {
   LppValue,
   global
 } from 'src/core'
+import type * as Serialization from '../serialization'
 import { Wrapper } from '../wrapper'
 
 export interface ScratchExtension {
@@ -42,6 +43,7 @@ export interface LppCompatibleRuntime extends VM.Runtime {
     LppReturn: typeof LppReturn
     LppException: typeof LppException
     Wrapper: typeof Wrapper
+    Serialization: typeof Serialization
     version: string
     global: typeof global
   }

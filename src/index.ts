@@ -39,14 +39,7 @@ import { Dialog, Inspector } from './impl/traceback'
 import { LppCompatibleBlockly, defineBlocks } from './impl/blockly/definition'
 import { LppTraceback } from './impl/context'
 import { warnError, warnException } from './impl/traceback'
-import {
-  SerializationInfo,
-  Validator,
-  attachMetadata,
-  deserializeBlock,
-  hasMetadata,
-  serializeBlock
-} from './impl/serialization'
+import * as Serialization from './impl/serialization'
 import { Wrapper } from './impl/wrapper'
 import { attachType } from './impl/metadata'
 
@@ -102,6 +95,10 @@ declare let Scratch: ScratchContext
      * Shared isMutatorClick state.
      */
     mutatorClick: boolean
+    /**
+     * Scratch util.
+     */
+    util?: VM.BlockUtility
     /**
      * Constructs a new instance of lpp.
      * @param runtime Scratch runtime.
@@ -201,7 +198,7 @@ declare let Scratch: ScratchContext
             self !== Global.Function ||
             !fn ||
             !(fn instanceof LppFunction) ||
-            !hasMetadata(fn) ||
+            !Serialization.hasMetadata(fn) ||
             fn.isTypehint
           ) {
             const res = Global.IllegalInvocationError.construct([])
@@ -236,18 +233,18 @@ declare let Scratch: ScratchContext
           const val: unknown = deserializeObject(
             args[0] ?? new LppConstant(null)
           )
-          if (Validator.isInfo(val)) {
+          if (Serialization.Validator.isInfo(val)) {
             if (!val.block) {
               const fn = new LppFunction(() => {
                 return new LppReturn(new LppConstant(null))
               })
-              attachMetadata(fn, undefined, undefined, undefined, val.signature)
+              Serialization.attachMetadata(fn, undefined, undefined, undefined, val.signature)
               return new LppReturn(fn)
             }
             const Blocks = this.runtime.flyoutBlocks
               .constructor as BlocksConstructor
             const blocks = new Blocks(this.runtime, true)
-            deserializeBlock(blocks, val.script)
+            Serialization.deserializeBlock(blocks, val.script)
             const fn = new LppFunction((self, args) => {
               const Target = this.runtime.targets[0]
                 .constructor as TargetConstructor
@@ -299,7 +296,7 @@ declare let Scratch: ScratchContext
                 })
               )
             })
-            attachMetadata(fn, undefined, blocks, val.block, val.signature)
+            Serialization.attachMetadata(fn, undefined, blocks, val.block, val.signature)
             return new LppReturn(fn)
           }
           const res = Global.SyntaxError.construct([
@@ -326,6 +323,7 @@ declare let Scratch: ScratchContext
         LppException,
         LppPromise,
         Wrapper,
+        Serialization,
         version: lppVersion,
         global
       }
@@ -602,37 +600,43 @@ declare let Scratch: ScratchContext
      */
     builtinType(
       args: { value: string },
-      { thread }: VM.BlockUtility
+      util: VM.BlockUtility
     ): Wrapper<LppValue> {
+      const { thread } = util
       const instance = global.get(args.value)
       const block = this.getActiveBlockInstance(args, thread)
+      this.util = util
       if (instance) {
         this.visualReport(block.id, thread, instance)
         return new Wrapper(instance)
       }
-      throw new Error('lpp: Not implemented')
+      throw new Error('lpp: not implemented')
     }
     /**
      * Same as builtinType.
      * @param args Function name.
+     * @param util Scratch util.
      * @returns Class.
      */
     builtinError(
       args: { value: string },
-      utils: VM.BlockUtility
+      util: VM.BlockUtility
     ): Wrapper<LppValue> {
-      return this.builtinType(args, utils)
+      this.util = util
+      return this.builtinType(args, util)
     }
     /**
      * Same as builtinType.
      * @param args Function name.
+     * @param util Scratch util.
      * @returns Class.
      */
     builtinUtility(
       args: { value: string },
-      utils: VM.BlockUtility
+      util: VM.BlockUtility
     ): Wrapper<LppValue> {
-      return this.builtinType(args, utils)
+      this.util = util
+      return this.builtinType(args, util)
     }
     /**
      * Get literal value.
@@ -642,8 +646,10 @@ declare let Scratch: ScratchContext
      */
     constructLiteral(
       args: { value: unknown },
-      { thread }: VM.BlockUtility
+      util: VM.BlockUtility
     ): Wrapper<LppConstant> | void {
+      const { thread } = util
+      this.util = util
       if (this.shouldExit(thread)) {
         try {
           return thread.stopThisScript()
@@ -665,7 +671,7 @@ declare let Scratch: ScratchContext
           case 'Infinity':
             return new LppConstant(Infinity)
         }
-        throw new Error('lpp: Unknown literal')
+        throw new Error('lpp: unknown literal')
       })()
       this.visualReport(block.id, thread, res)
       return new Wrapper(res)
@@ -678,8 +684,10 @@ declare let Scratch: ScratchContext
      */
     binaryOp(
       args: { lhs: unknown; op: string | number; rhs: unknown },
-      { thread }: VM.BlockUtility
+      util: VM.BlockUtility
     ): Wrapper<LppValue> | Wrapper<LppReference> | void {
+      const { thread } = util
+      this.util = util
       try {
         if (this.shouldExit(thread)) {
           try {
@@ -763,7 +771,7 @@ declare let Scratch: ScratchContext
      */
     unaryOp(
       args: { op: string; value: unknown },
-      { thread }: VM.BlockUtility
+      util: VM.BlockUtility
     ):
       | Promise<Wrapper<LppValue> | void>
       | Wrapper<LppValue>
@@ -779,6 +787,8 @@ declare let Scratch: ScratchContext
          ['yield', 'yield'],
          ['yield*', 'yield*']
        */
+      const { thread } = util
+      this.util = util
       try {
         if (this.shouldExit(thread)) {
           try {
@@ -863,10 +873,12 @@ declare let Scratch: ScratchContext
         string,
         unknown
       >,
-      { thread }: VM.BlockUtility
+      util: VM.BlockUtility
     ): Promise<void | Wrapper<LppValue>> | Wrapper<LppValue> | void {
       try {
         let { fn } = args
+        const { thread } = util
+        this.util = util
         fn = Wrapper.unwrap(fn)
         const actualArgs: LppValue[] = []
         // runtime hack by @FurryR.
@@ -927,10 +939,12 @@ declare let Scratch: ScratchContext
         string,
         unknown
       >,
-      { thread }: VM.BlockUtility
+      util: VM.BlockUtility
     ): Promise<void | Wrapper<LppValue>> | Wrapper<LppValue> | void {
       try {
         let { fn } = args
+        const { thread } = util
+        this.util = util
         fn = Wrapper.unwrap(fn)
         // runtime hack by @FurryR.
         const actualArgs: LppValue[] = []
@@ -981,8 +995,10 @@ declare let Scratch: ScratchContext
      * @param util Scratch util.
      * @returns Result.
      */
-    self(args: object, { thread }: VM.BlockUtility): Wrapper<LppValue> | void {
+    self(args: object, util: VM.BlockUtility): Wrapper<LppValue> | void {
       try {
+        const { thread } = util
+        this.util = util
         if (this.shouldExit(thread)) {
           try {
             return thread.stopThisScript()
@@ -1013,10 +1029,12 @@ declare let Scratch: ScratchContext
       args: {
         value: string | number
       },
-      { thread }: VM.BlockUtility
+      util: VM.BlockUtility
     ): Wrapper<LppConstant<number>> {
+      const { thread } = util
       const obj = new LppConstant(Number(args.value))
       const block = this.getActiveBlockInstance(args, thread)
+      this.util = util
       this.visualReport(block.id, thread, obj)
       return new Wrapper(obj)
     }
@@ -1029,10 +1047,12 @@ declare let Scratch: ScratchContext
       args: {
         value: string | number
       },
-      { thread }: VM.BlockUtility
+      util: VM.BlockUtility
     ): Wrapper<LppConstant<string>> {
+      const { thread } = util
       const obj = new LppConstant(String(args.value))
       const block = this.getActiveBlockInstance(args, thread)
+      this.util = util
       this.visualReport(block.id, thread, obj)
       return new Wrapper(obj)
     }
@@ -1044,9 +1064,11 @@ declare let Scratch: ScratchContext
      */
     constructArray(
       args: Record<string, unknown>,
-      { thread }: VM.BlockUtility
+      util: VM.BlockUtility
     ): Wrapper<LppArray> | void {
       try {
+        const { thread } = util
+        this.util = util
         if (this.shouldExit(thread)) {
           try {
             return thread.stopThisScript()
@@ -1077,9 +1099,11 @@ declare let Scratch: ScratchContext
      */
     constructObject(
       args: Record<string, unknown>,
-      { thread }: VM.BlockUtility
+      util: VM.BlockUtility
     ): Wrapper<LppObject> | void {
       try {
+        const { thread } = util
+        this.util = util
         if (this.shouldExit(thread)) {
           try {
             return thread.stopThisScript()
@@ -1121,9 +1145,11 @@ declare let Scratch: ScratchContext
      */
     constructFunction(
       args: Record<string, unknown>,
-      { thread, target }: VM.BlockUtility
+      util: VM.BlockUtility
     ): Wrapper<LppFunction> | void {
       try {
+        const { thread, target } = util
+        this.util = util
         const Target = target.constructor as TargetConstructor
         // runtime hack by @FurryR.
         if (this.shouldExit(thread)) {
@@ -1202,7 +1228,7 @@ declare let Scratch: ScratchContext
             })
           )
         })
-        attachMetadata(
+        Serialization.attachMetadata(
           fn,
           target.sprite.clones[0].id,
           blocks,
@@ -1223,9 +1249,11 @@ declare let Scratch: ScratchContext
      */
     var(
       args: { name: string },
-      { thread }: VM.BlockUtility
+      util: VM.BlockUtility
     ): Wrapper<LppReference> | void {
       try {
+        const { thread } = util
+        this.util = util
         if (this.shouldExit(thread)) {
           try {
             return thread.stopThisScript()
@@ -1250,8 +1278,10 @@ declare let Scratch: ScratchContext
      * @param param0 Return value.
      * @param util Scratch util.
      */
-    return({ value }: { value: unknown }, { thread }: VM.BlockUtility) {
+    return({ value }: { value: unknown }, util: VM.BlockUtility) {
       try {
+        const { thread } = util
+        this.util = util
         if (this.shouldExit(thread)) {
           try {
             return thread.stopThisScript()
@@ -1281,8 +1311,10 @@ declare let Scratch: ScratchContext
      * @param param0 Exception.
      * @param util Scratch util.
      */
-    throw({ value }: { value: unknown }, { thread }: VM.BlockUtility) {
+    throw({ value }: { value: unknown }, util: VM.BlockUtility) {
       try {
+        const { thread } = util
+        this.util = util
         if (this.shouldExit(thread)) {
           try {
             return thread.stopThisScript()
@@ -1320,9 +1352,11 @@ declare let Scratch: ScratchContext
      */
     scope(
       args: Record<string, unknown>,
-      { thread, target }: VM.BlockUtility
+      util: VM.BlockUtility
     ): Promise<void> | void {
       try {
+        const { thread, target } = util
+        this.util = util
         if (this.shouldExit(thread)) {
           try {
             return thread.stopThisScript()
@@ -1379,9 +1413,11 @@ declare let Scratch: ScratchContext
      */
     try(
       args: Record<string, unknown>,
-      { thread, target }: VM.BlockUtility
+      util: VM.BlockUtility
     ): Promise<void> | void {
       try {
+        const { thread, target } = util
+        this.util = util
         if (this.shouldExit(thread)) {
           try {
             return thread.stopThisScript()
@@ -1421,7 +1457,7 @@ declare let Scratch: ScratchContext
             }
             const GlobalError = global.get('Error')
             if (!(GlobalError instanceof LppFunction))
-              throw new Error('lpp: Not implemented')
+              throw new Error('lpp: not implemented')
             const error = value.value
             if (error.instanceof(GlobalError)) {
               const traceback = new LppArray(
@@ -1478,7 +1514,9 @@ declare let Scratch: ScratchContext
      * @param args Unneccessary argument.
      * @param util Scratch util.
      */
-    nop({ value }: { value: unknown }, { thread }: VM.BlockUtility) {
+    nop({ value }: { value: unknown }, util: VM.BlockUtility) {
+      const { thread } = util
+      this.util = util
       if (this.shouldExit(thread)) {
         try {
           return thread.stopThisScript()
@@ -1631,11 +1669,10 @@ declare let Scratch: ScratchContext
             v => args === v._argValues
           )?.id
       const block = id
-        ? thread.target.blocks.getBlock(id) ??
-          this.runtime.flyoutBlocks.getBlock(id)
+        ? container.getBlock(id) ?? this.runtime.flyoutBlocks.getBlock(id)
         : undefined
       if (!block) {
-        throw new Error('lpp: Cannot get active block')
+        throw new Error('lpp: cannot get active block')
       }
       return block
     }
@@ -1700,6 +1737,8 @@ declare let Scratch: ScratchContext
         this.runtime.sequencer.stepThread(callerThread) // restore globalState.
         callerThread.generator = orig
       }
+      if (this.util) this.util.thread = callerThread
+      else throw new Error('lpp: this.util is undefined')
     }
     /**
      * Serialize function.
@@ -1719,9 +1758,9 @@ declare let Scratch: ScratchContext
           script: {},
           block: null
         })
-      const info: SerializationInfo = {
+      const info: Serialization.SerializationInfo = {
         signature,
-        script: serializeBlock(blocks as LppCompatibleBlocks, block),
+        script: Serialization.serializeBlock(blocks as LppCompatibleBlocks, block),
         block: block.id
       }
       return serializeObject(info)

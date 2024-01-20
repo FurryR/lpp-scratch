@@ -294,12 +294,12 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
       const constructor = ensureValue(this.get('constructor'))
       if (!(constructor instanceof LppFunction))
         throw new Error(
-          'lpp: Unexpected constructor -- must be a LppFunction instance'
+          'lpp: unexpected constructor -- must be a LppFunction instance'
         )
       const proto = ensureValue(constructor.get('prototype'))
       if (!(proto instanceof LppObject))
         throw new Error(
-          'lpp: Unexpected prototype -- must be a LppObject instance'
+          'lpp: unexpected prototype -- must be a LppObject instance'
         )
       const member = lookupPrototype(proto, key)
       if (member === null) return new LppConstant(null)
@@ -323,12 +323,12 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
     const constructor = ensureValue(this.get('constructor'))
     if (!(constructor instanceof LppFunction))
       throw new Error(
-        'lpp: Unexpected constructor -- must be a LppFunction instance'
+        'lpp: unexpected constructor -- must be a LppFunction instance'
       )
     const proto = ensureValue(constructor.get('prototype'))
     if (!(proto instanceof LppObject))
       throw new Error(
-        'lpp: Unexpected prototype -- must be a LppObject instance'
+        'lpp: unexpected prototype -- must be a LppObject instance'
       )
     return lookupPrototype(proto, key) !== null
   }
@@ -543,12 +543,12 @@ export class LppObject extends LppValue {
       const constructor = ensureValue(this.get('constructor'))
       if (!(constructor instanceof LppFunction))
         throw new Error(
-          'lpp: Unexpected constructor -- must be a LppFunction instance'
+          'lpp: unexpected constructor -- must be a LppFunction instance'
         )
       const proto = ensureValue(constructor.get('prototype'))
       if (!(proto instanceof LppObject))
         throw new Error(
-          'lpp: Unexpected prototype -- must be a LppObject instance'
+          'lpp: unexpected prototype -- must be a LppObject instance'
         )
       const member = lookupPrototype(proto, key)
       if (member === null)
@@ -576,12 +576,12 @@ export class LppObject extends LppValue {
     const constructor = ensureValue(this.get('constructor'))
     if (!(constructor instanceof LppFunction))
       throw new Error(
-        'lpp: Unexpected constructor -- must be a LppFunction instance'
+        'lpp: unexpected constructor -- must be a LppFunction instance'
       )
     const proto = ensureValue(constructor.get('prototype'))
     if (!(proto instanceof LppObject))
       throw new Error(
-        'lpp: Unexpected prototype -- must be a LppObject instance'
+        'lpp: unexpected prototype -- must be a LppObject instance'
       )
     return lookupPrototype(proto, key) !== null
   }
@@ -731,12 +731,12 @@ export class LppArray extends LppValue {
         const constructor = ensureValue(this.get('constructor'))
         if (!(constructor instanceof LppFunction))
           throw new Error(
-            'lpp: Unexpected constructor -- must be a LppFunction instance'
+            'lpp: unexpected constructor -- must be a LppFunction instance'
           )
         const proto = ensureValue(constructor.get('prototype'))
         if (!(proto instanceof LppObject))
           throw new Error(
-            'lpp: Unexpected prototype -- must be a LppObject instance'
+            'lpp: unexpected prototype -- must be a LppObject instance'
           )
         const member = lookupPrototype(proto, key)
         if (member === null) throw new LppError('invalidIndex')
@@ -769,12 +769,12 @@ export class LppArray extends LppValue {
     const constructor = ensureValue(this.get('constructor'))
     if (!(constructor instanceof LppFunction))
       throw new Error(
-        'lpp: Unexpected constructor -- must be a LppFunction instance'
+        'lpp: unexpected constructor -- must be a LppFunction instance'
       )
     const proto = ensureValue(constructor.get('prototype'))
     if (!(proto instanceof LppObject))
       throw new Error(
-        'lpp: Unexpected prototype -- must be a LppObject instance'
+        'lpp: unexpected prototype -- must be a LppObject instance'
       )
     return lookupPrototype(proto, key) !== null
   }
@@ -967,12 +967,12 @@ export class LppFunction extends LppObject {
       const constructor = ensureValue(this.get('constructor'))
       if (!(constructor instanceof LppFunction))
         throw new Error(
-          'lpp: Unexpected constructor -- must be a LppFunction instance'
+          'lpp: unexpected constructor -- must be a LppFunction instance'
         )
       const proto = ensureValue(constructor.get('prototype'))
       if (!(proto instanceof LppObject))
         throw new Error(
-          'lpp: Unexpected prototype -- must be a LppObject instance'
+          'lpp: unexpected prototype -- must be a LppObject instance'
         )
       const member = lookupPrototype(proto, key)
       if (member === null)
@@ -1000,12 +1000,12 @@ export class LppFunction extends LppObject {
     const constructor = ensureValue(this.get('constructor'))
     if (!(constructor instanceof LppFunction))
       throw new Error(
-        'lpp: Unexpected constructor -- must be a LppFunction instance'
+        'lpp: unexpected constructor -- must be a LppFunction instance'
       )
     const proto = ensureValue(constructor.get('prototype'))
     if (!(proto instanceof LppObject))
       throw new Error(
-        'lpp: Unexpected prototype -- must be a LppObject instance'
+        'lpp: unexpected prototype -- must be a LppObject instance'
       )
     return lookupPrototype(proto, key) !== null
   }
@@ -1170,12 +1170,12 @@ export class LppPromise extends LppObject {
     // TODO: uncaughtException
     const GlobalPromise = global.get('Promise')
     if (!(GlobalPromise instanceof LppFunction)) {
-      throw new Error('lpp: Not implemented')
+      throw new Error('lpp: not implemented')
     }
     super(new Map(), GlobalPromise)
     this.resolve = this.reject = () => {
       throw new Error(
-        'lpp: Unexpected call -- check if Promise satisfies A+ standard.'
+        'lpp: unexpected call -- check if Promise satisfies A+ standard.'
       )
     }
     this.pm = new Promise((resolve, reject) => {
