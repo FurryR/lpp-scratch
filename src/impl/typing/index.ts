@@ -80,6 +80,9 @@ export interface LppCompatibleBlocks extends VM.Blocks {
 export interface TargetConstructor {
   new ({ blocks }: { blocks: VM.Blocks }): VM.Target
 }
+export interface SequencerConstructor {
+  new (runtime: VM.Runtime): VM.Sequencer
+}
 export interface ThreadConstructor {
   new (id: string): VM.Thread
   STATUS_DONE: number

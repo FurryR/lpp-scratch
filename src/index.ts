@@ -178,16 +178,9 @@ declare let Scratch: ScratchContext
           _emit as (this: VM.Runtime, event: string, ...args: unknown[]) => void
         ).call(this.runtime, event, ...args)
       }
-      const _stepThread =
-        this.runtime.sequencer.constructor.prototype.stepThread
       // Patch for early Scratch 3 versions (before commit 39b18fe by @mzgoddard, Apr 12, 2019).
       if (!('activeThread' in this.runtime.sequencer)) {
         this.isEarlyScratch = true
-        ;(
-          this.runtime.sequencer as VM.Sequencer
-        ).constructor.prototype.stepThread = function (thread: VM.Thread) {
-          _stepThread.call(this, (this.activeThread = thread))
-        }
       } else this.isEarlyScratch = false
       // Patch Function.
       Global.Function.set(
@@ -1561,7 +1554,7 @@ declare let Scratch: ScratchContext
      */
     private handleError(e: unknown): void {
       if (e instanceof LppError) {
-        const thread = this.runtime.sequencer.activeThread
+        const thread = this.util?.thread
         if (thread) {
           const stack = thread.peekStack()
           if (stack) {
@@ -1610,6 +1603,7 @@ declare let Scratch: ScratchContext
           }
         }
       })
+      // TODO: detect pushStack?
       if (this.isEarlyScratch) {
         /**
          * Patched pushStack().
@@ -1729,13 +1723,13 @@ declare let Scratch: ScratchContext
     }
     /**
      * Method for compiler to fix globalState.
-     * @param seq Sequencer.
      * @param thread Thread instance.
+     * @param callerThread Caller thread.
      */
     private stepThread(thread: LppCompatibleThread) {
-      const callerThread = this.runtime.sequencer
-        .activeThread as LppCompatibleThread
+      const callerThread = this.util?.thread as LppCompatibleThread
       this.runtime.sequencer.stepThread(thread)
+      if (this.util && callerThread) this.util.thread = callerThread // restore interpreter context
       if (
         thread.isCompiled &&
         callerThread &&
@@ -1746,11 +1740,9 @@ declare let Scratch: ScratchContext
         callerThread.generator = {
           next: () => {}
         }
-        this.runtime.sequencer.stepThread(callerThread) // restore globalState.
+        this.runtime.sequencer.stepThread(callerThread) // restore compiler context (globalState)
         callerThread.generator = orig
       }
-      if (this.util) this.util.thread = callerThread
-      else throw new Error('lpp: this.util is undefined')
     }
     /**
      * Serialize function.
