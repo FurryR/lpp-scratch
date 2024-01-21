@@ -15,10 +15,7 @@ export function show(
   const contentDiv = Blockly.DropDownDiv.getContentDiv(),
     elem = document.createElement('div')
   elem.setAttribute('class', 'valueReportBox')
-  // elem.style.overflowX = 'scroll'
   elem.append(...value)
-  elem.style.minWidth = 'none'
-  elem.style.minHeight = 'none'
   elem.style.maxWidth = 'none'
   elem.style.maxHeight = 'none'
   elem.style.textAlign = textAlign

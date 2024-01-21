@@ -402,11 +402,13 @@ Dialog.globalStyle.textContent += `
   list-style-type: disc;
   padding: 0;
   margin-left: 19.5px;
-  margin-top: 5px;
+  margin-top: 4px;
   margin-bottom: 0;
 }
 .lpp-list li {
-  margin-bottom: 5px;
+  line-height: 100%;
+  margin-top: 0;
+  margin-bottom: 4px;
 }
 .lpp-code {
   font-family: "Source Code Pro", "Fira Code", "DejaVu Sans Mono", "Cascadia Code", "Jetbrains Mono", "Lucida Console", Consolas, monospace;
