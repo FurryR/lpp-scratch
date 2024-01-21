@@ -157,6 +157,18 @@ declare let Scratch: ScratchContext
             | undefined
         )?.ScratchBlocks
       }
+      if (this.Blockly) {
+        console.groupCollapsed(
+          '❗ Undo/Redo feature is disabled in order to avoid undo bug.'
+        )
+        console.log(
+          '🔗 Reference: https://github.com/FurryR/lpp-scratch/issues/1'
+        )
+        console.groupEnd()
+        ;(
+          this.Blockly.Events as unknown as { recordUndo: boolean }
+        ).recordUndo = false
+      }
       // Ignore SAY and QUESTION calls on dummy target.
       const _emit = this.runtime.emit
       this.runtime.emit = (event: string, ...args: unknown[]): void => {
