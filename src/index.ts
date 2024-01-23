@@ -14,7 +14,6 @@ import {
   ThreadConstructor
 } from './impl/typing'
 import type * as ScratchBlocks from 'blockly/core'
-import { locale } from './impl/l10n'
 import {
   global,
   ensureValue,
@@ -35,15 +34,14 @@ import {
   serializeObject,
   deserializeObject
 } from './core'
-import { Dialog, Inspector } from './impl/traceback'
-import { BlocklyInstance } from './impl/blockly'
+import locale from './impl/l10n'
+import { Dialog, Inspector, warnError, warnException } from './impl/traceback'
+import { BlocklyInstance, Extension } from './impl/blockly'
 import { defineExtension } from './impl/block'
 import { LppTraceback } from './impl/context'
-import { warnError, warnException } from './impl/traceback'
 import * as Serialization from './impl/serialization'
 import { Wrapper } from './impl/wrapper'
 import { attachType } from './impl/metadata'
-import { Extension } from './impl/blockly'
 
 declare let Scratch: ScratchContext
 ;(function (Scratch: ScratchContext) {

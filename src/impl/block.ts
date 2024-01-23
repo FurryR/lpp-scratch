@@ -558,7 +558,7 @@ export function defineExtension(
           'binaryOp',
           Reporter.Square((instance, block) => {
             block.setTooltip(formatMessage('lpp.tooltip.operator.binaryOp'))
-            Input.Any(block, 'lhs')
+            Input.String(block, 'lhs', '')
             block.appendDummyInput().appendField(
               new instance.FieldDropdown([
                 ['=', '='],
@@ -587,7 +587,7 @@ export function defineExtension(
               ]) as ScratchBlocks.Field<string>,
               'op'
             )
-            Input.Any(block, 'rhs')
+            Input.String(block, 'rhs', '')
           })
         )
         .register(
