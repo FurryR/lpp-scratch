@@ -32,7 +32,7 @@
       //   "./types/*"
       // ]
       "scratch-vm": ["./node_modules/@turbowarp/types/index.d.ts"],
-      "scratch-blocks": ["./node_modules/@turbowarp/types/index.d.ts"]
+
     },
     "lib": ["ESNext", "DOM"],
     "target": "ESNext",

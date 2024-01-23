@@ -19,10 +19,16 @@ import {
  */
 export const global = new Map<string, LppValue>()
 export namespace Global {
+  /**
+   * lpp builtin `Boolean` -- constructor of boolean types.
+   */
   export const Boolean = LppFunction.native((_, args) => {
     if (args.length < 1) return new LppReturn(new LppConstant(false))
     return new LppReturn(new LppConstant(asBoolean(args[0])))
   }, new LppObject(new Map()))
+  /**
+   * lpp builtin `Number` -- constructor of number types.
+   */
   export const Number = LppFunction.native((_, args) => {
     /**
      * Convert args to number.
@@ -51,6 +57,9 @@ export namespace Global {
     }
     return new LppReturn(convertToNumber(args))
   }, new LppObject(new Map()))
+  /**
+   * lpp builtin `String` -- constructor of string types.
+   */
   export const String = LppFunction.native(
     (_, args) => {
       /**
@@ -85,6 +94,9 @@ export namespace Global {
       ])
     )
   )
+  /**
+   * lpp builtin `Array` -- constructor of array types.
+   */
   export const Array = LppFunction.native(
     (_, args) => {
       /**
@@ -121,6 +133,9 @@ export namespace Global {
       ])
     )
   )
+  /**
+   * lpp builtin `Object` -- constructor of object types.
+   */
   export const Object = LppFunction.native((_, args) => {
     /**
      * Convert args to object.
@@ -133,6 +148,9 @@ export namespace Global {
     }
     return new LppReturn(convertToObject(args))
   }, new LppObject(new Map()))
+  /**
+   * lpp builtin `Function` -- constructor of function types.
+   */
   export const Function = LppFunction.native(
     (_, args) => {
       if (args.length < 1)
@@ -197,6 +215,9 @@ export namespace Global {
       ])
     )
   )
+  /**
+   * lpp builtin `Promise` -- represents the eventual completion (or failure) of an asynchronous operation and its resulting value.
+   */
   export const Promise = LppFunction.native(
     (self, args) => {
       if (
@@ -276,6 +297,9 @@ export namespace Global {
       ])
     )
   )
+  /**
+   * lpp builtin `Error` -- `Error` objects are thrown when runtime errors occur.
+   */
   export const Error = LppFunction.native((self, args) => {
     if (self.instanceof(Error)) {
       self.set('value', args[0] ?? new LppConstant(null))
@@ -291,6 +315,9 @@ export namespace Global {
       return new LppException(res.value)
     }
   }, new LppObject(new Map()))
+  /**
+   * Lpp builtin `IllegalInvocationError` -- represents an error when trying to called a function with illegal arguments / context.
+   */
   export const IllegalInvocationError = LppFunction.native(
     (self, args) => {
       if (self.instanceof(IllegalInvocationError)) {
@@ -313,6 +340,9 @@ export namespace Global {
     },
     new LppObject(new Map([['prototype', ensureValue(Error.get('prototype'))]]))
   )
+  /**
+   * Lpp builtin `SyntaxError` -- represents an error when trying to interpret syntactically invalid code.
+   */
   export const SyntaxError = LppFunction.native(
     (self, args) => {
       if (self.instanceof(SyntaxError)) {

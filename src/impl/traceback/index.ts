@@ -1,6 +1,10 @@
-import type VM from 'scratch-vm'
+/**
+ * Blockly traceback implementation.
+ */
+
+import type { VM } from '../typing'
 import { LppException } from 'src/core'
-import { LppCompatibleBlockly } from '../blockly/definition'
+import { BlocklyInstance } from '../blockly'
 import * as Dialog from './dialog'
 import type ScratchBlocks from 'blockly/core'
 import { LppTraceback } from '../context'
@@ -112,7 +116,7 @@ export function showTraceback(svgRoot: SVGAElement) {
  * @param target Target ID.
  */
 export function warnError(
-  Blockly: LppCompatibleBlockly | undefined,
+  Blockly: BlocklyInstance | undefined,
   vm: VM,
   formatMessage: (id: string) => string,
   error: string,
@@ -208,11 +212,11 @@ export function warnError(
  * Warn exception.
  * @param Blockly Blockly global instance.
  * @param vm VM instance.
- * @param formatMessage formatMessage.
+ * @param formatMessage Function to format message.
  * @param exception Exception instance.
  */
 export function warnException(
-  Blockly: LppCompatibleBlockly | undefined,
+  Blockly: BlocklyInstance | undefined,
   vm: VM,
   formatMessage: (id: string) => string,
   exception: LppException

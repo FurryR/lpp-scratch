@@ -1,3 +1,6 @@
+/**
+ * Lpp core (standard) implementation.
+ */
 export { Global, global } from './global'
 export {
   LppClosure,

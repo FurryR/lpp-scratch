@@ -1,4 +1,4 @@
-import type VM from 'scratch-vm'
+import type OriginalVM from 'scratch-vm'
 import type { Message } from 'format-message'
 import type {
   LppArray,
@@ -16,13 +16,22 @@ import type {
 import type * as Serialization from '../serialization'
 import { Wrapper } from '../wrapper'
 
+/**
+ * Definition of Scratch extension.
+ */
 export interface ScratchExtension {
   getInfo(): object
 }
+/**
+ * Definition of Scratch.translate().
+ */
 export interface TranslateFn {
   (message: Message, args?: object | undefined): string
   setup(newTranslations: object | Message | null): void
 }
+/**
+ * Definition of Scratch object.
+ */
 export interface ScratchContext {
   extensions: {
     register(ext: ScratchExtension): void
@@ -31,6 +40,9 @@ export interface ScratchContext {
   translate: TranslateFn
   vm?: VM
 }
+/**
+ * Definition of runtime (with compiler support, for Turbowarp).
+ */
 export interface LppCompatibleRuntime extends VM.Runtime {
   lpp?: {
     LppValue: typeof LppValue
@@ -55,6 +67,9 @@ export interface LppCompatibleRuntime extends VM.Runtime {
     ((...args: unknown[]) => unknown) | ((...args: unknown[]) => unknown)[]
   >
 }
+/**
+ * Definition of lpp compatible thread.
+ */
 export interface LppCompatibleThread extends VM.Thread {
   lpp?: LppContext
   isCompiled?: boolean
@@ -63,13 +78,19 @@ export interface LppCompatibleThread extends VM.Thread {
   }
   tryCompile?(): void
 }
-export interface LppCompatibleVM extends VM {
+/**
+ * Definition of VM.
+ */
+export interface VM extends OriginalVM {
   _events: Record<
     keyof VM.RuntimeAndVirtualMachineEventMap,
     ((...args: unknown[]) => unknown) | ((...args: unknown[]) => unknown)[]
   >
 }
-export interface LppCompatibleBlocks extends VM.Blocks {
+/**
+ * Definition of Block container.
+ */
+export interface Blocks extends VM.Blocks {
   _cache: {
     _executeCached: Record<
       string,
@@ -77,17 +98,29 @@ export interface LppCompatibleBlocks extends VM.Blocks {
     >
   }
 }
+/**
+ * VM.Target constructor.
+ */
 export interface TargetConstructor {
   new ({ blocks }: { blocks: VM.Blocks }): VM.Target
 }
+/**
+ * VM.Sequencer constructor.
+ */
 export interface SequencerConstructor {
   new (runtime: VM.Runtime): VM.Sequencer
 }
+/**
+ * VM.Thread constructor.
+ */
 export interface ThreadConstructor {
   new (id: string): VM.Thread
   STATUS_DONE: number
   STATUS_RUNNING: number
 }
+/**
+ * VM.Blocks constructor.
+ */
 export interface BlocksConstructor {
   new (runtime: VM.Runtime, optNoGlow?: boolean /** = false */): VM.Blocks
 }

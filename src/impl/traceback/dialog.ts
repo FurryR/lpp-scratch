@@ -1,8 +1,16 @@
 import type ScratchBlocks from 'blockly/core'
-import { LppCompatibleBlockly } from '../blockly/definition'
+import { BlocklyInstance } from '../blockly'
 
+/**
+ * Show an advanced visualReport with HTML elements.
+ * @param Blockly Blockly instance.
+ * @param id Block ID.
+ * @param value HTML Nodes.
+ * @param textAlign Text alignment.
+ * @returns Returns visualReport box element if available.
+ */
 export function show(
-  Blockly: LppCompatibleBlockly,
+  Blockly: BlocklyInstance,
   id: string,
   value: (string | Node)[],
   textAlign: string
@@ -31,14 +39,25 @@ export function show(
   )
   return elem
 }
+/**
+ * Generate an icon group.
+ * @param icons Icon nodes.
+ * @returns Element.
+ */
 export function IconGroup(icons: (string | Node)[]): HTMLDivElement {
   const iconGroup = document.createElement('div')
   iconGroup.style.float = 'right'
   iconGroup.append(...icons)
   return iconGroup
 }
+/**
+ * Generate a close icon.
+ * @param Blockly Blockly instance.
+ * @param title Alternative hint of the close icon.
+ * @returns Element.
+ */
 export function CloseIcon(
-  Blockly: LppCompatibleBlockly,
+  Blockly: BlocklyInstance,
   title: string
 ): HTMLSpanElement {
   const icon = document.createElement('span')
@@ -50,12 +69,20 @@ export function CloseIcon(
   icon.textContent = '❌'
   return icon
 }
+/**
+ * Generate a help icon.
+ * @param title Alternative hint of the show icon.
+ * @param hideTitle Alternative hint of the hide icon.
+ * @param onShow Handles show behavior.
+ * @param onHide Handles hide behavior.
+ * @returns Element.
+ */
 export function HelpIcon(
   title: string,
-  closeTitle: string,
-  onOpen: () => void,
-  onClose: () => void
-) {
+  hideTitle: string,
+  onShow: () => void,
+  onHide: () => void
+): HTMLSpanElement {
   let state = false
   const icon = document.createElement('span')
   icon.classList.add('lpp-traceback-icon')
@@ -65,16 +92,21 @@ export function HelpIcon(
     if (state) {
       icon.textContent = '❓'
       icon.title = `❓ ${title}`
-      onClose()
+      onHide()
     } else {
       icon.textContent = '➖'
-      icon.title = `➖ ${closeTitle}`
-      onOpen()
+      icon.title = `➖ ${hideTitle}`
+      onShow()
     }
     state = !state
   })
   return icon
 }
+/**
+ * Generate title of visualReport window.
+ * @param value Title text.
+ * @returns Element.
+ */
 export function Title(value: string): HTMLDivElement {
   const text = document.createElement('div')
   text.style.textAlign = 'left'
@@ -84,12 +116,24 @@ export function Title(value: string): HTMLDivElement {
   text.title = text.textContent = value
   return text
 }
+/**
+ * Generate a text element.
+ * @param value Text value.
+ * @param className Element class name.
+ * @returns Element.
+ */
 export function Text(value: string, className?: string): HTMLSpanElement {
   const text = document.createElement('span')
   if (className) text.className = className
   text.textContent = value
   return text
 }
+/**
+ * Generate an element group (aka div).
+ * @param value Nodes.
+ * @param className Group class name.
+ * @returns Element.
+ */
 export function Div(
   value: (Node | string)[],
   className?: string
@@ -99,7 +143,11 @@ export function Div(
   div.append(...value)
   return div
 }
+/**
+ * Global style for traceback module.
+ */
 export const globalStyle = document.createElement('style')
+globalStyle.id = 'lpp-traceback-style'
 globalStyle.textContent = `
 .lpp-traceback-icon {
   transition: text-shadow 0.25s ease-out;

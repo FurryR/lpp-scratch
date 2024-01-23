@@ -12,12 +12,7 @@ export class LppError extends Error {
    * Construct a new Lpp error.
    * @param id Error ID.
    */
-  constructor(
-    /**
-     * Error ID.
-     */
-    public id: string
-  ) {
+  constructor(public id: string) {
     super(`lpp: Error ${id}`)
   }
 }
@@ -189,13 +184,7 @@ export class LppReference implements LppValue {
    */
   constructor(
     parent: LppValue,
-    /**
-     * Key name.
-     */
     public name: string,
-    /**
-     * Current object.
-     */
     public value: LppValue
   ) {
     this.parent = new WeakRef(parent)
@@ -512,15 +501,10 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
     throw new Error('lpp: unknown operand')
   }
   /**
-   * Constructs a value.
-   * @param value The value.
+   * Construct a value.
+   * @param _value The stored value.
    */
-  constructor(
-    /**
-     * The stored value.
-     */
-    private _value: T
-  ) {
+  constructor(private _value: T) {
     super()
   }
 }
@@ -896,12 +880,7 @@ export class LppArray extends LppValue {
    * Construct an array object.
    * @param value Array of values.
    */
-  constructor(
-    /**
-     * Array of values.
-     */
-    public value: (LppValue | undefined)[] = []
-  ) {
+  constructor(public value: (LppValue | undefined)[] = []) {
     super()
   }
 }
@@ -1084,9 +1063,6 @@ export class LppFunction extends LppObject {
    * @param prototype Function prototype.
    */
   constructor(
-    /**
-     * Function to execute.
-     */
     private execute: (
       self: LppValue,
       args: LppValue[]

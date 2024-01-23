@@ -37,6 +37,14 @@ export interface SerializeMetadata extends LppFunction {
    */
   isTypehint: boolean
 }
+/**
+ * Attaches metadata (for serialization) to specified function.
+ * @param originalFn Function to attach.
+ * @param target The target which function belongs to.
+ * @param blocks Block container of the function.
+ * @param block Function block.
+ * @param signature Signature.
+ */
 export function attachMetadata(
   originalFn: LppFunction,
   target: string | undefined,
@@ -51,6 +59,11 @@ export function attachMetadata(
   v.signature = signature
   v.isTypehint = false
 }
+/**
+ * Attach type hint to specified function.
+ * @param originalFn Function to attach.
+ * @param signature Signature.
+ */
 export function attachTypehint(originalFn: LppFunction, signature: string[]) {
   const v = originalFn as SerializeMetadata
   v.signature = signature
@@ -66,6 +79,12 @@ export function hasMetadata(fn: LppFunction): fn is SerializeMetadata {
     typeof v.isTypehint === 'boolean'
   )
 }
+/**
+ * Serialize all blocks related to specified block, including the block itself.
+ * @param container Block container.
+ * @param block Specified block.
+ * @returns Block list.
+ */
 export function serializeBlock(
   container: VM.Blocks,
   block: VM.Block
@@ -92,13 +111,26 @@ export function serializeBlock(
   res[block.id].parent = null
   return res
 }
+/**
+ * Deserialize blocks to a container.
+ * @param container Block container.
+ * @param blocks Blocks to deserialize.
+ */
 export function deserializeBlock(
   container: VM.Blocks,
   blocks: Record<string, VM.Block>
 ) {
   container._blocks = blocks
 }
+/**
+ * Validator of serialized block JSON.
+ */
 export namespace Validator {
+  /**
+   * Check if value is a Field.
+   * @param value Value to check.
+   * @returns True if value is a Field, false otherwise.
+   */
   export function isField(value: unknown): value is VM.Field {
     if (!(value instanceof Object)) return false
     const v = value as Record<string, unknown>
@@ -107,6 +139,11 @@ export namespace Validator {
     if (typeof v.value !== 'string') return false
     return true
   }
+  /**
+   * Check if value is an Input.
+   * @param value Value to check.
+   * @returns True if value is an Input, false otherwise.
+   */
   export function isInput(
     container: Record<string, unknown>,
     value: unknown
@@ -118,6 +155,11 @@ export namespace Validator {
     if (typeof v.block !== 'string' || !(v.block in container)) return false
     return true
   }
+  /**
+   * Check if value is a Block.
+   * @param value Value to check.
+   * @returns True if value is a Block, false otherwise.
+   */
   export function isBlock(
     container: Record<string, unknown>,
     id: string,
@@ -155,6 +197,11 @@ export namespace Validator {
       return false
     return true
   }
+  /**
+   * Check if value is valid serialized data.
+   * @param value Value to check.
+   * @returns True if value is valid, false otherwise.
+   */
   export function isInfo(value: unknown): value is SerializationInfo {
     if (!(value instanceof Object)) return false
     const v = value as Record<string, unknown>

@@ -1,6 +1,9 @@
 import { LppFunction, LppReference, LppValue, ensureValue } from 'src/core'
 import { Global } from '../core/global'
 import { attachTypehint } from './serialization'
+/**
+ * Attach type hint to builtin functions.
+ */
 export function attachType() {
   function attachType(fn: LppValue | LppReference, signature: string[]) {
     const v = ensureValue(fn)

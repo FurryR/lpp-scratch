@@ -1,3 +1,6 @@
+/**
+ * Localization of lpp extension.
+ */
 export const locale = {
   en: {
     // Name

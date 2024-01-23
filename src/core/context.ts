@@ -7,12 +7,7 @@ export class LppReturn {
    * Construct a new LppReturn instance.
    * @param value Result.
    */
-  constructor(
-    /**
-     * Result.
-     */
-    public value: LppValue
-  ) {
+  constructor(public value: LppValue) {
     this.value = value
   }
 }
@@ -35,16 +30,14 @@ export class LppException {
    * Construct a new LppException instance.
    * @param value Result.
    */
-  constructor(
-    /**
-     * Result.
-     */
-    public value: LppValue
-  ) {
+  constructor(public value: LppValue) {
     this.stack = []
   }
 }
 export namespace LppTraceback {
+  /**
+   * Abstract base class of traceback.
+   */
   export abstract class Base {
     abstract toString(): string
   }
@@ -59,11 +52,8 @@ export namespace LppTraceback {
      * @param args Arguments.
      */
     constructor(
-      /** Called function. */
       public fn: LppFunction,
-      /** Self. */
       public self: LppValue,
-      /** Arguments. */
       public args: LppValue[]
     ) {
       super()
@@ -73,6 +63,9 @@ export namespace LppTraceback {
     }
   }
 }
+/**
+ * Closure.
+ */
 export class LppClosure extends LppValue {
   value: Map<string, LppValue> = new Map()
   /**
@@ -127,7 +120,7 @@ export class LppClosure extends LppValue {
   }
 }
 /**
- * Lpp Scope.
+ * Context.
  */
 export class LppContext {
   /**
@@ -182,17 +175,8 @@ export class LppContext {
    * @param exceptionCallback Callback if function throws.
    */
   constructor(
-    /**
-     * Parent closure.
-     */
     public parent: LppContext | undefined,
-    /**
-     * Callback if function returns.
-     */
     private _returnCallback: (value: LppReturn) => void,
-    /**
-     * Callback if function throws.
-     */
     private _exceptionCallback: (value: LppException) => void
   ) {
     this.closure = new LppClosure()
@@ -218,9 +202,6 @@ export class LppFunctionContext extends LppContext {
    */
   constructor(
     parent: LppContext | undefined,
-    /**
-     * @type Self object.
-     */
     public self: LppValue,
     returnCallback: (value: LppReturn) => void,
     exceptionCallback: (value: LppException) => void

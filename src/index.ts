@@ -5,15 +5,15 @@
 
 import {
   BlocksConstructor,
-  LppCompatibleBlocks,
+  Blocks,
   LppCompatibleRuntime,
   LppCompatibleThread,
-  LppCompatibleVM,
+  VM,
   ScratchContext,
   TargetConstructor,
   ThreadConstructor
 } from './impl/typing'
-import type VM from 'scratch-vm'
+import type * as ScratchBlocks from 'blockly/core'
 import { locale } from './impl/l10n'
 import {
   global,
@@ -36,12 +36,14 @@ import {
   deserializeObject
 } from './core'
 import { Dialog, Inspector } from './impl/traceback'
-import { LppCompatibleBlockly, defineBlocks } from './impl/blockly/definition'
+import { BlocklyInstance } from './impl/blockly'
+import { defineExtension } from './impl/block'
 import { LppTraceback } from './impl/context'
 import { warnError, warnException } from './impl/traceback'
 import * as Serialization from './impl/serialization'
 import { Wrapper } from './impl/wrapper'
 import { attachType } from './impl/metadata'
+import { Extension } from './impl/blockly'
 
 declare let Scratch: ScratchContext
 ;(function (Scratch: ScratchContext) {
@@ -78,35 +80,29 @@ declare let Scratch: ScratchContext
     /**
      * Virtual machine instance.
      */
-    vm: LppCompatibleVM
+    vm: VM
     /**
      * ScratchBlocks instance.
      */
-    Blockly?: LppCompatibleBlockly
+    Blockly?: BlocklyInstance
     /**
-     * Whether the extension is initalized.
+     * Blockly extension.
      */
-    initalized: boolean
-    /**
-     * Shared isMutatorClick state.
-     */
-    mutatorClick: boolean
+    extension: Extension
     /**
      * Scratch util.
      */
     util?: VM.BlockUtility
     /**
-     * Constructs a new instance of lpp.
+     * Construct a new instance of lpp.
      * @param runtime Scratch runtime.
      */
     constructor(runtime: VM.Runtime) {
-      this.initalized = false
       this.runtime = runtime as LppCompatibleRuntime
       this.Blockly = undefined
-      this.mutatorClick = false
       Scratch.translate.setup(locale)
       // step 1: get virtual machine instance
-      let virtualMachine: LppCompatibleVM | undefined
+      let virtualMachine: VM | undefined
       if (this.runtime._events['QUESTION'] instanceof Array) {
         for (const value of this.runtime._events['QUESTION']) {
           const v = hijack(value) as
@@ -117,7 +113,7 @@ declare let Scratch: ScratchContext
               }
             | undefined
           if (v?.props?.vm) {
-            virtualMachine = v?.props?.vm as LppCompatibleVM | undefined
+            virtualMachine = v?.props?.vm as VM | undefined
             break
           }
         }
@@ -130,17 +126,22 @@ declare let Scratch: ScratchContext
                 }
               }
             | undefined
-        )?.props?.vm as LppCompatibleVM | undefined
+        )?.props?.vm as VM | undefined
       }
       if (!virtualMachine)
         throw new Error('lpp cannot get Virtual Machine instance.')
       this.vm = virtualMachine
+      this.extension = defineExtension(
+        color,
+        this.runtime,
+        this.formatMessage.bind(this)
+      )
       // step 2: get ScratchBlocks instance
       if (this.vm._events['EXTENSION_ADDED'] instanceof Array) {
         for (const value of this.vm._events['EXTENSION_ADDED']) {
           const v = hijack(value) as
             | {
-                ScratchBlocks?: LppCompatibleBlockly
+                ScratchBlocks?: BlocklyInstance
               }
             | undefined
           if (v?.ScratchBlocks) {
@@ -152,26 +153,63 @@ declare let Scratch: ScratchContext
         this.Blockly = (
           hijack(this.vm._events['EXTENSION_ADDED']) as
             | {
-                ScratchBlocks?: LppCompatibleBlockly
+                ScratchBlocks?: BlocklyInstance
               }
             | undefined
         )?.ScratchBlocks
       }
       if (this.Blockly) {
-        console.groupCollapsed(
-          '❗ Undo/Redo feature is disabled in order to avoid undo bug.'
-        )
-        console.log(
-          '🔗 Reference: https://github.com/FurryR/lpp-scratch/issues/1'
-        )
-        console.groupEnd()
-        ;(
-          this.Blockly.Events as unknown as { recordUndo: boolean }
-        ).recordUndo = false
+        const Blockly = this.Blockly
+        const Events = Blockly.Events as unknown as {
+          Change: BlocklyInstance['Events']['Abstract']
+          Create: BlocklyInstance['Events']['Abstract']
+          Move: BlocklyInstance['Events']['Abstract']
+        }
+        // Patch: redo bug -- force re-render the block after change
+        const _Change = Events.Change.prototype.run
+        Events.Change.prototype.run = function (_forward: boolean) {
+          _Change.call(this, _forward)
+          const self = this as unknown as {
+            blockId: string
+          }
+          const block = this.getEventWorkspace_().getBlockById(
+            self.blockId
+          ) as ScratchBlocks.BlockSvg | null
+          if (block instanceof Blockly.BlockSvg) {
+            block.initSvg()
+            block.render()
+          }
+        }
+        // Patch: undo bug -- silent fail if block is not exist
+        const _Move = Events.Move.prototype.run
+        Events.Move.prototype.run = function (_forward: boolean) {
+          // pre-check before run
+          const self = this as unknown as {
+            blockId: string
+          }
+          const block = this.getEventWorkspace_().getBlockById(
+            self.blockId
+          ) as ScratchBlocks.BlockSvg | null
+          if (block) _Move.call(this, _forward)
+        }
+        const _Create = Events.Create.prototype.run
+        Events.Create.prototype.run = function (_forward: boolean) {
+          // patch before run
+          const self = this as unknown as {
+            ids: string[]
+          }
+          const res: string[] = []
+          const workspace = this.getEventWorkspace_()
+          for (const id of self.ids) {
+            if (workspace.getBlockById(id)) res.push(id)
+          }
+          self.ids = res
+          _Create.call(this, _forward)
+        }
       }
       // Ignore SAY and QUESTION calls on dummy target.
       const _emit = this.runtime.emit
-      this.runtime.emit = (event: string, ...args: unknown[]): void => {
+      this.runtime.emit = (event: string, ...args: unknown[]) => {
         const blacklist = ['SAY', 'QUESTION']
         if (
           blacklist.includes(event) &&
@@ -195,7 +233,7 @@ declare let Scratch: ScratchContext
           this.Blockly
         ) {
           Dialog.show(
-            this.Blockly as LppCompatibleBlockly,
+            this.Blockly as BlocklyInstance,
             blockId,
             [
               Inspector(
@@ -407,218 +445,12 @@ declare let Scratch: ScratchContext
      * @returns Extension info.
      */
     getInfo() {
-      // Sometimes getInfo() is called multiple times due to engine defects.
-      if (!this.initalized) {
-        this.initalized = true
-        if (this.Blockly) {
-          defineBlocks(
-            this.Blockly,
-            color,
-            this,
-            this.vm,
-            this.formatMessage.bind(this)
-          )
-        }
-      }
+      if (this.Blockly) this.extension.inject(this.Blockly)
       return {
         id: 'lpp',
         name: this.formatMessage('lpp.name'),
         color1: color,
-        blocks: [
-          {
-            blockType: 'label',
-            text: `#️⃣ ${this.formatMessage('lpp.category.builtin')}`
-          },
-          {
-            opcode: 'builtinType',
-            blockType: 'reporter',
-            text: '[value]',
-            arguments: {
-              value: {
-                type: 'string',
-                menu: 'dummy'
-              }
-            }
-          },
-          {
-            opcode: 'builtinError',
-            blockType: 'reporter',
-            text: '[value]',
-            arguments: {
-              value: {
-                type: 'string',
-                menu: 'dummy'
-              }
-            }
-          },
-          {
-            opcode: 'builtinUtility',
-            blockType: 'reporter',
-            text: '[value]',
-            arguments: {
-              value: {
-                type: 'string',
-                menu: 'dummy'
-              }
-            }
-          },
-          {
-            blockType: 'label',
-            text: `🚧 ${this.formatMessage('lpp.category.construct')}`
-          },
-          {
-            opcode: 'constructLiteral',
-            blockType: 'reporter',
-            text: '[value]',
-            arguments: {
-              value: {
-                type: 'string',
-                menu: 'dummy'
-              }
-            }
-          },
-          {
-            opcode: 'constructNumber',
-            blockType: 'reporter',
-            text: '[value]',
-            arguments: {
-              value: {
-                type: 'string',
-                defaultValue: '10'
-              }
-            }
-          },
-          {
-            opcode: 'constructString',
-            blockType: 'reporter',
-            text: '[value]',
-            arguments: {
-              value: {
-                type: 'string',
-                defaultValue: '🌟'
-              }
-            }
-          },
-          {
-            opcode: 'constructArray',
-            blockType: 'reporter',
-            text: ''
-          },
-          {
-            opcode: 'constructObject',
-            blockType: 'reporter',
-            text: ''
-          },
-          {
-            opcode: 'constructFunction',
-            blockType: 'reporter',
-            text: ''
-          },
-          {
-            blockType: 'label',
-            text: `🔢 ${this.formatMessage('lpp.category.operator')}`
-          },
-          {
-            opcode: 'binaryOp',
-            blockType: 'reporter',
-            text: '[lhs][op][rhs]',
-            arguments: {
-              lhs: { type: 'string' },
-              op: {
-                type: 'string',
-                menu: 'dummy'
-              },
-              rhs: { type: 'string' }
-            }
-          },
-          {
-            opcode: 'unaryOp',
-            blockType: 'reporter',
-            text: '[op][value]',
-            arguments: {
-              op: {
-                type: 'string',
-                menu: 'dummy'
-              },
-              value: { type: 'any' }
-            }
-          },
-          {
-            opcode: 'call',
-            blockType: 'reporter',
-            text: '[fn]',
-            arguments: {
-              fn: { type: 'any' }
-            }
-          },
-          {
-            opcode: 'new',
-            blockType: 'reporter',
-            text: '[fn]',
-            arguments: {
-              fn: { type: 'any' }
-            }
-          },
-          {
-            opcode: 'self',
-            blockType: 'reporter',
-            text: ''
-          },
-          {
-            opcode: 'var',
-            blockType: 'reporter',
-            text: '[name]',
-            arguments: {
-              name: {
-                type: 'string',
-                defaultValue: '🐺'
-              }
-            }
-          },
-          {
-            blockType: 'label',
-            text: `🤖 ${this.formatMessage('lpp.category.statement')}`
-          },
-          {
-            opcode: 'return',
-            isTerminal: true,
-            blockType: 'command',
-            text: '[value]',
-            arguments: {
-              value: { type: 'any' }
-            }
-          },
-          {
-            opcode: 'throw',
-            isTerminal: true,
-            blockType: 'command',
-            text: '[value]',
-            arguments: {
-              value: { type: 'any' }
-            }
-          },
-          {
-            opcode: 'scope',
-            blockType: 'command',
-            text: ''
-          },
-          {
-            opcode: 'try',
-            blockType: 'command',
-            text: '[var]',
-            arguments: {
-              var: { type: 'any' }
-            }
-          },
-          {
-            opcode: 'nop',
-            blockType: 'command',
-            text: '[value]',
-            arguments: {
-              value: { type: 'any' }
-            }
-          }
-        ],
+        blocks: this.extension.export(),
         menus: {
           dummy: {
             acceptReporters: false,
@@ -636,15 +468,7 @@ declare let Scratch: ScratchContext
       args: { value: string },
       util: VM.BlockUtility
     ): Wrapper<LppValue> | void {
-      const { thread } = util
       this.util = util
-      if (this.shouldExit(thread)) {
-        try {
-          return thread.stopThisScript()
-        } catch (_) {
-          return
-        }
-      }
       const instance = global.get(args.value)
       if (instance) {
         return new Wrapper(instance)
@@ -685,15 +509,7 @@ declare let Scratch: ScratchContext
       args: { value: unknown },
       util: VM.BlockUtility
     ): Wrapper<LppConstant> | void {
-      const { thread } = util
       this.util = util
-      if (this.shouldExit(thread)) {
-        try {
-          return thread.stopThisScript()
-        } catch (_) {
-          return
-        }
-      }
       const res = (() => {
         switch (args.value) {
           case 'null':
@@ -721,16 +537,8 @@ declare let Scratch: ScratchContext
       args: { lhs: unknown; op: string | number; rhs: unknown },
       util: VM.BlockUtility
     ): Wrapper<LppValue> | Wrapper<LppReference> | void {
-      const { thread } = util
       this.util = util
       try {
-        if (this.shouldExit(thread)) {
-          try {
-            return thread.stopThisScript()
-          } catch (_) {
-            return
-          }
-        }
         const lhs = Wrapper.unwrap(args.lhs)
         const rhs = Wrapper.unwrap(args.rhs)
         const res = (() => {
@@ -820,16 +628,8 @@ declare let Scratch: ScratchContext
          ['yield', 'yield'],
          ['yield*', 'yield*']
        */
-      const { thread } = util
       this.util = util
       try {
-        if (this.shouldExit(thread)) {
-          try {
-            return thread.stopThisScript()
-          } catch (_) {
-            return
-          }
-        }
         const value = Wrapper.unwrap(args.value)
         if (!(value instanceof LppValue || value instanceof LppReference))
           throw new LppError('syntaxError')
@@ -913,13 +713,6 @@ declare let Scratch: ScratchContext
         fn = Wrapper.unwrap(fn)
         const actualArgs: LppValue[] = []
         // runtime hack by @FurryR.
-        if (this.shouldExit(thread)) {
-          try {
-            return thread.stopThisScript()
-          } catch (_) {
-            return
-          }
-        }
         const block = this.getActiveBlockInstance(args, thread)
         const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
@@ -978,13 +771,6 @@ declare let Scratch: ScratchContext
         // runtime hack by @FurryR.
         const actualArgs: LppValue[] = []
         // runtime hack by @FurryR.
-        if (this.shouldExit(thread)) {
-          try {
-            return thread.stopThisScript()
-          } catch (_) {
-            return
-          }
-        }
         const block = this.getActiveBlockInstance(args, thread)
         const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
@@ -1026,13 +812,6 @@ declare let Scratch: ScratchContext
       try {
         const { thread } = util
         this.util = util
-        if (this.shouldExit(thread)) {
-          try {
-            return thread.stopThisScript()
-          } catch (_) {
-            return
-          }
-        }
         const lppThread = thread as LppCompatibleThread
         if (lppThread.lpp) {
           const unwind = lppThread.lpp.unwind()
@@ -1088,13 +867,6 @@ declare let Scratch: ScratchContext
       try {
         const { thread } = util
         this.util = util
-        if (this.shouldExit(thread)) {
-          try {
-            return thread.stopThisScript()
-          } catch (_) {
-            return
-          }
-        }
         const arr = new LppArray()
         const block = this.getActiveBlockInstance(args, thread)
         const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
@@ -1122,13 +894,6 @@ declare let Scratch: ScratchContext
       try {
         const { thread } = util
         this.util = util
-        if (this.shouldExit(thread)) {
-          try {
-            return thread.stopThisScript()
-          } catch (_) {
-            return
-          }
-        }
         const obj = new LppObject()
         const block = this.getActiveBlockInstance(args, thread)
         const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
@@ -1169,13 +934,6 @@ declare let Scratch: ScratchContext
         this.util = util
         const Target = target.constructor as TargetConstructor
         // runtime hack by @FurryR.
-        if (this.shouldExit(thread)) {
-          try {
-            return thread.stopThisScript()
-          } catch (_) {
-            return
-          }
-        }
         const block = this.getActiveBlockInstance(args, thread)
         const signature: string[] = []
         const len = parseInt(
@@ -1270,13 +1028,6 @@ declare let Scratch: ScratchContext
       try {
         const { thread } = util
         this.util = util
-        if (this.shouldExit(thread)) {
-          try {
-            return thread.stopThisScript()
-          } catch (_) {
-            return
-          }
-        }
         const lppThread = thread as LppCompatibleThread
         if (lppThread.lpp) {
           const v = lppThread.lpp.get(args.name)
@@ -1296,13 +1047,6 @@ declare let Scratch: ScratchContext
       try {
         const { thread } = util
         this.util = util
-        if (this.shouldExit(thread)) {
-          try {
-            return thread.stopThisScript()
-          } catch (_) {
-            return
-          }
-        }
         value = Wrapper.unwrap(value)
         if (!(value instanceof LppValue || value instanceof LppReference))
           throw new LppError('syntaxError')
@@ -1329,13 +1073,6 @@ declare let Scratch: ScratchContext
       try {
         const { thread } = util
         this.util = util
-        if (this.shouldExit(thread)) {
-          try {
-            return thread.stopThisScript()
-          } catch (_) {
-            return
-          }
-        }
         value = Wrapper.unwrap(value)
         if (!(value instanceof LppValue || value instanceof LppReference))
           throw new LppError('syntaxError')
@@ -1371,13 +1108,6 @@ declare let Scratch: ScratchContext
       try {
         const { thread, target } = util
         this.util = util
-        if (this.shouldExit(thread)) {
-          try {
-            return thread.stopThisScript()
-          } catch (_) {
-            return
-          }
-        }
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, thread)
         const id = block.inputs.SUBSTACK?.block
@@ -1432,13 +1162,6 @@ declare let Scratch: ScratchContext
       try {
         const { thread, target } = util
         this.util = util
-        if (this.shouldExit(thread)) {
-          try {
-            return thread.stopThisScript()
-          } catch (_) {
-            return
-          }
-        }
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, thread)
         const dest = Wrapper.unwrap(args.var)
@@ -1531,13 +1254,6 @@ declare let Scratch: ScratchContext
     nop({ value }: { value: unknown }, util: VM.BlockUtility): unknown {
       const { thread } = util
       this.util = util
-      if (this.shouldExit(thread)) {
-        try {
-          return thread.stopThisScript()
-        } catch (_) {
-          return
-        }
-      }
       if (
         (thread as LppCompatibleThread).isCompiled &&
         thread.stackClick &&
@@ -1554,7 +1270,7 @@ declare let Scratch: ScratchContext
      * Handle syntax error.
      * @param e Error object.
      */
-    private handleError(e: unknown): void {
+    private handleError(e: unknown) {
       if (e instanceof LppError) {
         const thread = this.util?.thread
         if (thread) {
@@ -1577,7 +1293,7 @@ declare let Scratch: ScratchContext
      * Handle unhandled exceptions.
      * @param e LppException object.
      */
-    private handleException(e: LppException): void {
+    private handleException(e: LppException) {
       warnException(this.Blockly, this.vm, this.formatMessage.bind(this), e)
       this.runtime.stopAll()
     }
@@ -1635,18 +1351,6 @@ declare let Scratch: ScratchContext
       }
     }
     /**
-     * Detect if the block should exit directly.
-     * @param thread Current thread.
-     * @returns Whether the block is triggered by clicking on the mutator icon.
-     */
-    private shouldExit(thread: VM.Thread): boolean {
-      if (this.mutatorClick) {
-        if (thread.stack.length === 1) this.mutatorClick = false
-        if (thread.stackClick) return true
-      }
-      return false
-    }
-    /**
      * Get active block instance of specified thread.
      * @param args Block arguments.
      * @param thread Thread.
@@ -1656,7 +1360,7 @@ declare let Scratch: ScratchContext
       args: object,
       thread: LppCompatibleThread
     ): VM.Block {
-      const container = thread.target.blocks as LppCompatibleBlocks
+      const container = thread.target.blocks as Blocks
       const id = thread.isCompiled
         ? thread.peekStack()
         : container._cache._executeCached[thread.peekStack()]?._ops?.find(
@@ -1695,7 +1399,7 @@ declare let Scratch: ScratchContext
       })
       target.id = ''
       target.runtime = this.runtime
-      const warnFn = (): void => {
+      const warnFn = () => {
         this.handleError(new LppError('useAfterDispose'))
         this.runtime.stopAll()
       }
@@ -1752,10 +1456,7 @@ declare let Scratch: ScratchContext
         })
       const info: Serialization.SerializationInfo = {
         signature,
-        script: Serialization.serializeBlock(
-          blocks as LppCompatibleBlocks,
-          block
-        ),
+        script: Serialization.serializeBlock(blocks as Blocks, block),
         block: block.id
       }
       return serializeObject(info)

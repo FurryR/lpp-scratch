@@ -7,23 +7,39 @@ import {
   Global
 } from 'src/core'
 import { Dialog } from '.'
-import { BlocklyInstance } from '../blockly/definition'
+import { BlocklyInstance } from '../blockly'
 import { hasMetadata } from '../serialization'
-import type VM from 'scratch-vm'
+import type { VM } from '../typing'
 import type ScratchBlocks from 'blockly/core'
 
+/**
+ * Generate an inspector of specified object.
+ * @param Blockly Blockly instance.
+ * @param vm VM instance.
+ * @param formatMessage Function to format message.
+ * @param value The value to be inspected.
+ * @returns Element.
+ */
 export function Inspector(
   Blockly: BlocklyInstance,
   vm: VM,
   formatMessage: (id: string) => string,
   value: LppValue
 ): HTMLSpanElement {
+  /**
+   * Generate an extend icon.
+   * @param title Alternative hint of the show icon.
+   * @param hideTitle Alternative hint of the hide icon.
+   * @param onShow Handles show behavior.
+   * @param onHide Handles hide behavior.
+   * @returns Element.
+   */
   function ExtendIcon(
     title: string,
-    closeTitle: string,
-    onOpen: () => void,
-    onClose: () => void
-  ) {
+    hideTitle: string,
+    onShow: () => void,
+    onHide: () => void
+  ): HTMLSpanElement {
     let state = false
     const icon = document.createElement('span')
     icon.classList.add('lpp-traceback-icon')
@@ -33,16 +49,21 @@ export function Inspector(
       if (state) {
         icon.textContent = '➕'
         icon.title = `➕ ${title}`
-        onClose()
+        onHide()
       } else {
         icon.textContent = '➖'
-        icon.title = `➖ ${closeTitle}`
-        onOpen()
+        icon.title = `➖ ${hideTitle}`
+        onShow()
       }
       state = !state
     })
     return icon
   }
+  /**
+   * Internal function for member list.
+   * @param value Object.
+   * @returns List element.
+   */
   function objView(
     value: LppArray | LppObject | LppFunction
   ): HTMLUListElement {
