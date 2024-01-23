@@ -7,7 +7,7 @@ import {
   BlocksConstructor,
   Blocks,
   LppCompatibleRuntime,
-  LppCompatibleThread,
+  Thread,
   VM,
   ScratchContext,
   TargetConstructor,
@@ -321,7 +321,7 @@ declare let Scratch: ScratchContext
               const thread = this.runtime._pushThread(
                 block.inputs.SUBSTACK.block,
                 target
-              ) as LppCompatibleThread
+              ) as Thread
               thread.lpp = new LppFunctionContext(
                 undefined,
                 self ?? new LppConstant(null),
@@ -348,7 +348,7 @@ declare let Scratch: ScratchContext
               // })
               // Call callback (if exists) when the thread is finished.
               this.bindThread(thread, () => {
-                ;(thread as LppCompatibleThread)?.lpp?.returnCallback(
+                ;(thread as Thread)?.lpp?.returnCallback(
                   new LppReturn(new LppConstant(null))
                 )
               })
@@ -810,7 +810,7 @@ declare let Scratch: ScratchContext
       try {
         const { thread } = util
         this.util = util
-        const lppThread = thread as LppCompatibleThread
+        const lppThread = thread as Thread
         if (lppThread.lpp) {
           const unwind = lppThread.lpp.unwind()
           if (unwind) {
@@ -946,7 +946,7 @@ declare let Scratch: ScratchContext
         let context: LppContext | undefined
         const blocks = thread.target.blocks
         const targetId = target.id
-        const lppThread = thread as LppCompatibleThread
+        const lppThread = thread as Thread
         if (lppThread.lpp) {
           context = lppThread.lpp
         }
@@ -959,10 +959,7 @@ declare let Scratch: ScratchContext
           if (!block.inputs.SUBSTACK)
             return new LppReturn(new LppConstant(null))
           const id = block.inputs.SUBSTACK.block
-          const thread = this.runtime._pushThread(
-            id,
-            target
-          ) as LppCompatibleThread
+          const thread = this.runtime._pushThread(id, target) as Thread
           thread.lpp = new LppFunctionContext(
             context,
             self ?? new LppConstant(null),
@@ -989,7 +986,7 @@ declare let Scratch: ScratchContext
           // })
           // Call callback (if exists) when the thread is finished.
           this.bindThread(thread, () => {
-            ;(thread as LppCompatibleThread)?.lpp?.returnCallback(
+            ;(thread as Thread)?.lpp?.returnCallback(
               new LppReturn(new LppConstant(null))
             )
           })
@@ -1026,7 +1023,7 @@ declare let Scratch: ScratchContext
       try {
         const { thread } = util
         this.util = util
-        const lppThread = thread as LppCompatibleThread
+        const lppThread = thread as Thread
         if (lppThread.lpp) {
           const v = lppThread.lpp.get(args.name)
           return new Wrapper(v)
@@ -1049,7 +1046,7 @@ declare let Scratch: ScratchContext
         if (!(value instanceof LppValue || value instanceof LppReference))
           throw new LppError('syntaxError')
         const val = ensureValue(value)
-        const lppThread = thread as LppCompatibleThread
+        const lppThread = thread as Thread
         if (lppThread.lpp) {
           const ctx = lppThread.lpp.unwind()
           if (ctx instanceof LppFunctionContext) {
@@ -1076,7 +1073,7 @@ declare let Scratch: ScratchContext
           throw new LppError('syntaxError')
         const val = ensureValue(value)
         const result = new LppException(val)
-        const lppThread = thread as LppCompatibleThread
+        const lppThread = thread as Thread
         result.pushStack(
           new LppTraceback.Block(
             thread.target.sprite.clones[0].id,
@@ -1110,11 +1107,8 @@ declare let Scratch: ScratchContext
         const block = this.getActiveBlockInstance(args, thread)
         const id = block.inputs.SUBSTACK?.block
         if (!id) return
-        const parentThread = thread as LppCompatibleThread
-        const scopeThread = this.runtime._pushThread(
-          id,
-          target
-        ) as LppCompatibleThread
+        const parentThread = thread as Thread
+        const scopeThread = this.runtime._pushThread(id, target) as Thread
         let resolveFn: (() => void) | undefined
         let resolved = false
         scopeThread.lpp = new LppContext(
@@ -1167,11 +1161,8 @@ declare let Scratch: ScratchContext
         const id = block.inputs.SUBSTACK?.block
         if (!id) return
         const captureId = block.inputs.SUBSTACK_2?.block
-        const parentThread = thread as LppCompatibleThread
-        const tryThread = this.runtime._pushThread(
-          id,
-          target
-        ) as LppCompatibleThread
+        const parentThread = thread as Thread
+        const tryThread = this.runtime._pushThread(id, target) as Thread
         let triggered = false
         let resolveFn: (() => void) | undefined
         let resolved = false
@@ -1204,7 +1195,7 @@ declare let Scratch: ScratchContext
             const catchThread = this.runtime._pushThread(
               captureId,
               target
-            ) as LppCompatibleThread
+            ) as Thread
             catchThread.lpp = new LppContext(
               parentThread.lpp ?? undefined,
               value => {
@@ -1253,7 +1244,7 @@ declare let Scratch: ScratchContext
       const { thread } = util
       this.util = util
       if (
-        (thread as LppCompatibleThread).isCompiled &&
+        (thread as Thread).isCompiled &&
         thread.stackClick &&
         thread.atStackTop() &&
         !thread.target.blocks.getBlock(thread.peekStack())?.next &&
@@ -1300,7 +1291,7 @@ declare let Scratch: ScratchContext
      * @param thread Thread object.
      * @param fn Dedicated function.
      */
-    private bindThread(thread: LppCompatibleThread, fn: () => void) {
+    private bindThread(thread: Thread, fn: () => void) {
       // Call callback (if exists) when the thread is finished.
       let status = thread.status
       let alreadyCalled = false
@@ -1328,7 +1319,7 @@ declare let Scratch: ScratchContext
      */
     private processApplyValue(
       result: LppReturnOrException,
-      thread: LppCompatibleThread
+      thread: Thread
     ): LppValue | void {
       if (result instanceof LppReturn) {
         return result.value
@@ -1354,10 +1345,7 @@ declare let Scratch: ScratchContext
      * @param thread Thread.
      * @returns Block instance.
      */
-    private getActiveBlockInstance(
-      args: object,
-      thread: LppCompatibleThread
-    ): VM.Block {
+    private getActiveBlockInstance(args: object, thread: Thread): VM.Block {
       const container = thread.target.blocks as Blocks
       const id = thread.isCompiled
         ? thread.peekStack()
@@ -1392,11 +1380,14 @@ declare let Scratch: ScratchContext
       blocks: VM.Blocks
     ): VM.Target {
       // Use a dummy target instead of the original disposed target
-      const target = new Target({
-        blocks
-      })
+      const target = new Target(
+        {
+          blocks,
+          name: ''
+        },
+        this.runtime
+      )
       target.id = ''
-      target.runtime = this.runtime
       const warnFn = () => {
         this.handleError(new LppError('useAfterDispose'))
         this.runtime.stopAll()
@@ -1416,8 +1407,8 @@ declare let Scratch: ScratchContext
      * @param thread Thread instance.
      * @param callerThread Caller thread.
      */
-    private stepThread(thread: LppCompatibleThread) {
-      const callerThread = this.util?.thread as LppCompatibleThread
+    private stepThread(thread: Thread) {
+      const callerThread = this.util?.thread as Thread
       this.runtime.sequencer.stepThread(thread)
       if (this.util && callerThread) this.util.thread = callerThread // restore interpreter context
       if (

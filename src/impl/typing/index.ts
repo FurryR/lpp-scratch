@@ -70,7 +70,7 @@ export interface LppCompatibleRuntime extends VM.Runtime {
 /**
  * Definition of lpp compatible thread.
  */
-export interface LppCompatibleThread extends VM.Thread {
+export interface Thread extends VM.Thread {
   lpp?: LppContext
   isCompiled?: boolean
   generator?: {
@@ -102,7 +102,7 @@ export interface Blocks extends VM.Blocks {
  * VM.Target constructor.
  */
 export interface TargetConstructor {
-  new ({ blocks }: { blocks: VM.Blocks }): VM.Target
+  new ({ blocks, name }: { blocks: VM.Blocks, name: string }, runtime: VM.Runtime): VM.Target
 }
 /**
  * VM.Sequencer constructor.
