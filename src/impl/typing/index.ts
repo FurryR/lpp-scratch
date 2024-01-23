@@ -102,7 +102,10 @@ export interface Blocks extends VM.Blocks {
  * VM.Target constructor.
  */
 export interface TargetConstructor {
-  new ({ blocks, name }: { blocks: VM.Blocks, name: string }, runtime: VM.Runtime): VM.Target
+  new (
+    { blocks, name }: { blocks: VM.Blocks; name: string },
+    runtime: VM.Runtime
+  ): VM.Target
 }
 /**
  * VM.Sequencer constructor.
