@@ -1,29 +1,13 @@
 /**
  * Lpp core (standard) implementation.
  */
-export { Global, global } from './global'
-export {
-  LppClosure,
-  LppTraceback,
-  LppContext,
-  LppException,
-  LppFunctionContext,
-  LppReturn,
-  LppReturnOrException
-} from './context'
-export {
-  LppArray,
-  LppReference,
-  LppConstant,
-  LppError,
-  LppFunction,
-  LppObject,
-  LppPromise,
-  LppValue
-} from './type'
+export * from './global'
+export * from './context'
+export * from './type'
 export {
   ensureValue,
   asBoolean,
   serializeObject,
-  deserializeObject
+  deserializeObject,
+  isPromise
 } from './helper'

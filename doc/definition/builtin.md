@@ -75,7 +75,7 @@ declare class Promise {
    */
   constructor(
     executor: (
-      resolve: (value: any | Promise<any>) => void,
+      resolve: (value: any | PromiseLike<any>) => void,
       reject: (reason: any) => void
     ) => void
   )
@@ -86,8 +86,8 @@ declare class Promise {
    * @returns New Promise instance.
    */
   then(
-    onFulfilled: (value: any) => any | Promise<any>,
-    onRejected: (reason: any) => any | Promise<any>
+    onFulfilled: (value: any) => any | PromiseLike<any>,
+    onRejected: (reason: any) => any | PromiseLike<any>
   ): Promise<any>
   /**
    * Register exception handlers.

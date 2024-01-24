@@ -724,7 +724,7 @@ export function defineExtension(
               formatMessage('lpp.block.statement.return')
             )
             Input.Any(block, 'value')
-          })
+          }, true)
         )
         .register(
           'throw',
@@ -736,7 +736,7 @@ export function defineExtension(
               formatMessage('lpp.block.statement.throw')
             )
             Input.Any(block, 'value')
-          })
+          }, true)
         )
         .register(
           'scope',

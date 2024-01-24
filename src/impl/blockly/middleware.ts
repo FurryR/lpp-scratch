@@ -33,6 +33,7 @@ function _ReporterBase(
 /**
  * Middleware to set a block as command.
  * @param fn Function.
+ * @param isTerminal True if the block is a terminal block. Defaults to false.
  * @returns Processed function.
  */
 export function Command(
@@ -41,7 +42,8 @@ export function Command(
     instance: BlocklyInstance,
     block: Block,
     ...args: never[]
-  ) => void
+  ) => void,
+  isTerminal: boolean = false
 ): (
   this: BlockDescriptor,
   instance: BlocklyInstance,
@@ -54,7 +56,7 @@ export function Command(
     block: Block,
     ...args: never[]
   ) {
-    block.setNextStatement(true)
+    block.setNextStatement(!isTerminal)
     block.setPreviousStatement(true)
     block.setOutputShape(instance.OUTPUT_SHAPE_SQUARE)
     return fn.call(this, instance, block, ...args)

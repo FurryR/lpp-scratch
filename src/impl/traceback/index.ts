@@ -232,7 +232,7 @@ export function warnException(
       text.push(
         `🤔 ${formatMessage('lpp.error.uncaughtException.exception')}`,
         document.createElement('br'),
-        Inspector(Blockly, vm, formatMessage, exception.value), // TODO: Object view
+        Inspector(Blockly, vm, formatMessage, exception.value), // TODO: Better design
         document.createElement('br')
       )
       text.push(`👾 ${formatMessage('lpp.error.uncaughtException.traceback')}`)

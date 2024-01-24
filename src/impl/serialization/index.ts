@@ -132,7 +132,7 @@ export namespace Validator {
    * @returns True if value is a Field, false otherwise.
    */
   export function isField(value: unknown): value is VM.Field {
-    if (!(value instanceof Object)) return false
+    if (!(typeof value === 'object' && value !== null)) return false
     const v = value as Record<string, unknown>
     if (v.id !== null && typeof v.id !== 'string') return false
     if (typeof v.name !== 'string') return false
@@ -148,7 +148,7 @@ export namespace Validator {
     container: Record<string, unknown>,
     value: unknown
   ): value is VM.Input {
-    if (!(value instanceof Object)) return false
+    if (!(typeof value === 'object' && value !== null)) return false
     const v = value as Record<string, unknown>
     if (v.shadow !== null && typeof v.shadow !== 'string') return false
     if (typeof v.name !== 'string') return false
@@ -165,7 +165,7 @@ export namespace Validator {
     id: string,
     value: unknown
   ): value is VM.Block {
-    if (!(value instanceof Object)) return false
+    if (!(typeof value === 'object' && value !== null)) return false
     const v = value as Record<string, unknown>
     if (v.id !== id) return false
     if (typeof v.opcode !== 'string') return false
@@ -184,16 +184,19 @@ export namespace Validator {
     if (typeof v.shadow !== 'boolean') return false
     if (typeof v.topLevel !== 'boolean') return false
     if (
-      !(v.inputs instanceof Object) ||
+      !(typeof v.inputs === 'object' && v.inputs !== null) ||
       !Object.values(v.inputs).every(elem => isInput(container, elem))
     )
       return false
     if (
-      !(v.fields instanceof Object) ||
+      !(v.fields === 'object' && v.fields !== null) ||
       !Object.values(v.fields).every(v => isField(v))
     )
       return false
-    if (v.mutation !== undefined && !(v.mutation instanceof Object))
+    if (
+      v.mutation !== undefined &&
+      !(v.mutation === 'object' && v.mutation !== null)
+    )
       return false
     return true
   }
@@ -203,7 +206,7 @@ export namespace Validator {
    * @returns True if value is valid, false otherwise.
    */
   export function isInfo(value: unknown): value is SerializationInfo {
-    if (!(value instanceof Object)) return false
+    if (!(typeof value === 'object' && value !== null)) return false
     const v = value as Record<string, unknown>
     if (
       !(v.signature instanceof Array) ||
@@ -211,7 +214,7 @@ export namespace Validator {
     )
       return false
     if (
-      !(v.script instanceof Object) ||
+      !(typeof v.script === 'object' && v.script !== null) ||
       !Object.entries(v.script).every(elem =>
         isBlock(v.script as Record<string, unknown>, elem[0], elem[1])
       )

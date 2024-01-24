@@ -1,3 +1,4 @@
+import { LppException, LppReturn, LppReturnOrException } from './context'
 import {
   LppValue,
   LppReference,
@@ -251,4 +252,56 @@ export function serializeObject(value: unknown): LppValue {
     return new LppConstant(null)
   }
   return serializeInternal(value)
+}
+export function isPromise(value: unknown): value is PromiseLike<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Record<string | number | symbol, unknown>).then ===
+      'function'
+  )
+}
+export function processThenReturn(
+  returnValue: LppReturnOrException,
+  resolve: (v: LppValue) => void,
+  reject: (reason: unknown) => void
+): undefined | PromiseLike<void> {
+  if (returnValue instanceof LppReturn) {
+    const value = returnValue.value
+    if (!(value instanceof LppConstant) || value.value !== null) {
+      const then = ensureValue(value.get('then'))
+      if (then instanceof LppFunction) {
+        const res = then.apply(value, [
+          new LppFunction((_, args) => {
+            // resolve
+            const res = processThenReturn(
+              new LppReturn(args[0] ?? new LppConstant(null)),
+              resolve,
+              reject
+            )
+            if (isPromise(res)) {
+              return res.then(() => new LppReturn(new LppConstant(null)))
+            }
+            return new LppReturn(new LppConstant(null))
+          }),
+          new LppFunction((_, args) => {
+            // reject
+            reject(args[0] ?? new LppConstant(null))
+            return new LppReturn(new LppConstant(null))
+          })
+        ])
+        if (isPromise(res)) {
+          return res.then(value => {
+            // PromiseLike should return a PromiseLike. Here we do not care about that.
+            if (value instanceof LppException) {
+              reject(value.value)
+            }
+          })
+        }
+        return undefined
+      }
+    }
+    return void resolve(returnValue.value)
+  }
+  return void reject(returnValue.value)
 }
