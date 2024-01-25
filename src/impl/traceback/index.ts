@@ -6,7 +6,7 @@ import type { VM } from '../typing'
 import { LppException } from 'src/core'
 import { BlocklyInstance } from '../blockly'
 import * as Dialog from './dialog'
-import type ScratchBlocks from 'blockly/core'
+import type * as ScratchBlocks from 'blockly/core'
 import { LppTraceback } from '../context'
 import { Inspector } from './inspector'
 let lastNotification: Notification | undefined

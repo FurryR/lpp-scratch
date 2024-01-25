@@ -68,33 +68,71 @@ declare class Function {
 Here is the definition of `Promise` class.
 
 ```typescript
-declare class Promise {
+interface Thenable<T> {
+  then(onFulfilled?: (value: T) => void, onRejected?: (reason: any) => void): void
+}
+interface PromiseLike<T> implements Thenable<T> {
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onFulfilled The callback to execute when the Promise is resolved.
+     * @param onRejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onFulfilled?: (value: T) => TResult1 | PromiseLike<TResult1>, onRejected?: (reason: any) => TResult2 | PromiseLike<TResult2>): PromiseLike<TResult1 | TResult2>
+}
+/**
+ * Recursively unwraps the "awaited type" of a type. Non-promise "thenables" should resolve to `never`. This emulates the behavior of `await`.
+ */
+type Awaited<T> = T extends null ? T : // special case for `null | undefined` when not in `--strictNullChecks` mode
+  T extends object & { then(onfulfilled: infer F, ...args: infer _): any; } ? // `await` only unwraps object types with a callable `then`. Non-object types are not unwrapped
+    F extends ((value: infer V, ...args: infer _) => any) ? // if the argument to `then` is callable, extracts the first argument
+      Awaited<V> : // recursively unwrap the value
+      never : // the argument to `then` was not callable
+  T // non-object or non-thenable
+declare class Promise<T> implements PromiseLike<T> {
   /**
    * @constructor Construct a Promise instance.
    * @param executor Executor.
    */
   constructor(
-    executor: (
-      resolve: (value: any | PromiseLike<any>) => void,
-      reject: (reason: any) => void
-    ) => void
+    executor: (resolve: (value: T | Thenable<T>) => void, reject: (reason?: any) => void) => void
   )
   /**
-   * Register then functions.
-   * @param onFulfilled Triggers when the promise is fulfilled.
-   * @param onRejected Triggers when the promise is rejected.
-   * @returns New Promise instance.
+   * Attaches callbacks for the resolution and/or rejection of the Promise.
+   * @param onFulfilled The callback to execute when the Promise is resolved.
+   * @param onRejected The callback to execute when the Promise is rejected.
+   * @returns A Promise for the completion of which ever callback is executed.
    */
-  then(
-    onFulfilled: (value: any) => any | PromiseLike<any>,
-    onRejected: (reason: any) => any | PromiseLike<any>
-  ): Promise<any>
+  then<TResult1 = T, TResult2 = never>(onFulfilled?: ((value: T) => TResult1 | Thenable<TResult1>), onRejected?: (reason: any) => TResult2 | Thenable<TResult2>): Promise<TResult1 | TResult2>
   /**
-   * Register exception handlers.
-   * @param onRejected Triggers when the promise is rejected.
-   * @returns New Promise instance.
+   * Attaches a callback for only the rejection of the Promise.
+   * @param onRejected The callback to execute when the Promise is rejected.
+   * @returns A Promise for the completion of the callback.
    */
-  catch(onRejected: (reason: any) => any): Promise<any>
+  catch<TResult = never>(onRejected?: ((reason: any) => TResult | Thenable<TResult>)): Promise<T | TResult>;
+  /**
+   * Creates a new rejected promise for the provided reason.
+   * @param reason The reason the promise was rejected.
+   * @returns A new rejected Promise.
+   */
+  static reject<T = never>(reason?: any): Promise<T>
+  /**
+   * Creates a new resolved promise.
+   * @returns A resolved promise.
+   */
+  static resolve(): Promise<void>
+  /**
+   * Creates a new resolved promise for the provided value.
+   * @param value A promise.
+   * @returns A promise whose internal state matches the provided promise.
+   */
+  static resolve<T>(value: T): Promise<Awaited<T>>
+  /**
+   * Creates a new resolved promise for the provided value.
+   * @param value A promise.
+   * @returns A promise whose internal state matches the provided promise.
+   */
+  static resolve<T>(value: T | Thenable<T>): Promise<Awaited<T>>;
 }
 ```
 

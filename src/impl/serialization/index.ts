@@ -1,4 +1,4 @@
-import type VM from 'scratch-vm'
+import type * as VM from 'scratch-vm'
 import { LppFunction } from 'src/core'
 export interface SerializationInfo {
   /**

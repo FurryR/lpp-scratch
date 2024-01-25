@@ -10,7 +10,7 @@ import { Dialog } from '.'
 import { BlocklyInstance } from '../blockly'
 import { hasMetadata } from '../serialization'
 import type { VM } from '../typing'
-import type ScratchBlocks from 'blockly/core'
+import type * as ScratchBlocks from 'blockly/core'
 
 /**
  * Generate an inspector of specified object.

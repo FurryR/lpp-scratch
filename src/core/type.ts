@@ -1087,19 +1087,21 @@ export class LppPromise extends LppObject {
    * @param rejectFn
    * @returns
    */
-  done(resolveFn: LppFunction, rejectFn?: LppFunction): LppPromise {
+  done(resolveFn?: LppFunction, rejectFn?: LppFunction): LppPromise {
     return LppPromise.generate((resolve, reject) => {
       this.pm.then(
-        value => {
-          if (value instanceof LppValue) {
-            const res = resolveFn.apply(this, [value])
-            if (isPromise(res)) {
-              return res.then(v => processThenReturn(v, resolve, reject))
+        resolveFn
+          ? value => {
+              if (value instanceof LppValue) {
+                const res = resolveFn.apply(this, [value])
+                if (isPromise(res)) {
+                  return res.then(v => processThenReturn(v, resolve, reject))
+                }
+                return processThenReturn(res, resolve, reject)
+              }
+              throw new Error('lpp: unknown result')
             }
-            return processThenReturn(res, resolve, reject)
-          }
-          throw new Error('lpp: unknown result')
-        },
+          : undefined,
         rejectFn
           ? err => {
               if (err instanceof LppValue) {

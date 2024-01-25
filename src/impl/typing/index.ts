@@ -1,4 +1,4 @@
-import type OriginalVM from 'scratch-vm'
+import type * as OriginalVM from 'scratch-vm'
 import type { Message } from 'format-message'
 import type {
   LppArray,

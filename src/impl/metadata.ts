@@ -14,9 +14,11 @@ export function attachType() {
   attachType(Global.Function.get('serialize'), ['fn'])
   attachType(Global.Promise, ['executor'])
   attachType(Global.Promise.get('prototype').get('then'), [
-    'onFulfilled',
+    'onFulfilled?',
     'onRejected?'
   ])
+  attachType(Global.Promise.get('resolve'), ['value?'])
+  attachType(Global.Promise.get('reject'), ['reason?'])
   attachType(Global.Promise.get('prototype').get('catch'), ['onRejected'])
   attachType(Global.JSON.get('parse'), ['json'])
   attachType(Global.JSON.get('stringify'), ['value'])

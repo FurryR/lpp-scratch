@@ -1,4 +1,4 @@
-import type ScratchBlocks from 'blockly/core'
+import type * as ScratchBlocks from 'blockly/core'
 import { BlocklyInstance } from '../blockly'
 
 /**

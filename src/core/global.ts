@@ -13,7 +13,8 @@ import {
   serializeObject,
   ensureValue,
   deserializeObject,
-  isPromise
+  isPromise,
+  processThenReturn
 } from './helper'
 function processPromise(self: LppPromise, res: LppPromise): LppReturn {
   self.pm = res.pm
@@ -235,9 +236,15 @@ export namespace Global {
         const temp = LppPromise.generate((resolve, reject) => {
           const res = fn.apply(self, [
             new LppFunction((_, args) => {
-              const v = args[0] ?? new LppConstant(null)
-              // TODO: detect if v is PromiseLike
-              resolve(v)
+              // resolve
+              const res = processThenReturn(
+                new LppReturn(args[0] ?? new LppConstant(null)),
+                resolve,
+                reject
+              )
+              if (isPromise(res)) {
+                return res.then(() => new LppReturn(new LppConstant(null)))
+              }
               return new LppReturn(new LppConstant(null))
             }),
             new LppFunction((_, args) => {
@@ -266,14 +273,10 @@ export namespace Global {
         [
           'then',
           LppFunction.native((self, args) => {
-            if (
-              self instanceof LppPromise &&
-              args.length > 0 &&
-              args[0] instanceof LppFunction
-            ) {
+            if (self instanceof LppPromise) {
               return new LppReturn(
                 self.done(
-                  args[0],
+                  args[0] instanceof LppFunction ? args[0] : undefined,
                   args[1] instanceof LppFunction ? args[1] : undefined
                 )
               )
@@ -310,6 +313,54 @@ export namespace Global {
         ]
       ])
     )
+  )
+  Promise.set(
+    'resolve',
+    LppFunction.native((self, args) => {
+      if (self !== Promise) {
+        const res = IllegalInvocationError.construct([])
+        if (isPromise(res))
+          throw new globalThis.Error(
+            'lpp: IllegalInvocationError constructor should be synchronous'
+          )
+        if (res instanceof LppException) return res
+        return new LppException(res.value)
+      }
+      const res = LppPromise.generate((resolve, reject) => {
+        const res = processThenReturn(
+          new LppReturn(args[0] ?? new LppConstant(null)),
+          resolve,
+          reject
+        )
+        if (isPromise(res)) {
+          return res.then(() => {})
+        }
+        return undefined
+      })
+      if (isPromise(res)) {
+        return res.then(v => new LppReturn(v))
+      }
+      return new LppReturn(res)
+    })
+  )
+  Promise.set(
+    'reject',
+    LppFunction.native((self, args) => {
+      if (self !== Promise) {
+        const res = IllegalInvocationError.construct([])
+        if (isPromise(res))
+          throw new globalThis.Error(
+            'lpp: IllegalInvocationError constructor should be synchronous'
+          )
+        if (res instanceof LppException) return res
+        return new LppException(res.value)
+      }
+      return new LppReturn(
+        new LppPromise(
+          globalThis.Promise.reject(args[0] ?? new LppConstant(null))
+        )
+      )
+    })
   )
   /**
    * lpp builtin `Error` -- `Error` objects are thrown when runtime errors occur.
@@ -384,7 +435,7 @@ export namespace Global {
       [
         'parse',
         LppFunction.native((self, args) => {
-          if (self != JSON) {
+          if (self !== JSON) {
             const res = IllegalInvocationError.construct([])
             if (isPromise(res))
               throw new globalThis.Error(
@@ -426,7 +477,7 @@ export namespace Global {
       [
         'stringify',
         LppFunction.native((self, args) => {
-          if (self != JSON) {
+          if (self !== JSON) {
             const res = IllegalInvocationError.construct([])
             if (isPromise(res))
               throw new globalThis.Error(
