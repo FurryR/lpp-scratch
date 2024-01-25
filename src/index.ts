@@ -73,10 +73,6 @@ declare let Scratch: ScratchContext
    */
   class LppExtension {
     /**
-     *  Scratch runtime.
-     */
-    runtime: LppCompatibleRuntime
-    /**
      * Virtual machine instance.
      */
     vm: VM
@@ -94,16 +90,17 @@ declare let Scratch: ScratchContext
     util?: VM.BlockUtility
     /**
      * Construct a new instance of lpp.
-     * @param runtime Scratch runtime.
+     * @param originalRuntime Scratch runtime.
      */
-    constructor(runtime: VM.Runtime) {
-      this.runtime = runtime as LppCompatibleRuntime
+    constructor(originalRuntime: VM.Runtime) {
+      // this.vm.runtime = runtime as LppCompatibleRuntime
+      const compatibleRuntime = originalRuntime as LppCompatibleRuntime
       this.Blockly = undefined
       Scratch.translate.setup(locale)
       // step 1: get virtual machine instance
       let virtualMachine: VM | undefined
-      if (this.runtime._events['QUESTION'] instanceof Array) {
-        for (const value of this.runtime._events['QUESTION']) {
+      if (compatibleRuntime._events['QUESTION'] instanceof Array) {
+        for (const value of compatibleRuntime._events['QUESTION']) {
           const v = hijack(value) as
             | {
                 props?: {
@@ -116,9 +113,9 @@ declare let Scratch: ScratchContext
             break
           }
         }
-      } else if (this.runtime._events['QUESTION']) {
+      } else if (compatibleRuntime._events['QUESTION']) {
         virtualMachine = (
-          hijack(this.runtime._events['QUESTION']) as
+          hijack(compatibleRuntime._events['QUESTION']) as
             | {
                 props?: {
                   vm?: VM
@@ -132,7 +129,7 @@ declare let Scratch: ScratchContext
       this.vm = virtualMachine
       this.extension = defineExtension(
         color,
-        this.runtime,
+        this.vm.runtime,
         this.formatMessage.bind(this)
       )
       // step 2: get ScratchBlocks instance
@@ -207,8 +204,8 @@ declare let Scratch: ScratchContext
         }
       }
       // Ignore SAY and QUESTION calls on dummy target.
-      const _emit = this.runtime.emit
-      this.runtime.emit = (event: string, ...args: unknown[]) => {
+      const _emit = this.vm.runtime.emit
+      this.vm.runtime.emit = (event: string, ...args: unknown[]) => {
         const blacklist = ['SAY', 'QUESTION']
         if (
           blacklist.includes(event) &&
@@ -221,11 +218,11 @@ declare let Scratch: ScratchContext
         }
         return (
           _emit as (this: VM.Runtime, event: string, ...args: unknown[]) => void
-        ).call(this.runtime, event, ...args)
+        ).call(this.vm.runtime, event, ...args)
       }
       // Patch visualReport.
-      const _visualReport = this.runtime.visualReport
-      this.runtime.visualReport = (blockId: string, value: unknown) => {
+      const _visualReport = this.vm.runtime.visualReport
+      this.vm.runtime.visualReport = (blockId: string, value: unknown) => {
         const value2 = Wrapper.unwrap(value)
         if (
           (value2 instanceof LppValue || value2 instanceof LppReference) &&
@@ -245,8 +242,113 @@ declare let Scratch: ScratchContext
             value2 instanceof LppConstant ? 'center' : 'left'
           )
         } else {
-          return _visualReport.call(this.runtime, blockId, value)
+          return _visualReport.call(this.vm.runtime, blockId, value)
         }
+      }
+      // Experimental feature: monitor with inspector
+      console.log(
+        '🧪 You are currently using a experimental feature: monitor with inspector. This is very unstable and still under development at current.'
+      )
+      const _requestUpdateMonitor = (this.vm.runtime as LppCompatibleRuntime)
+        .requestUpdateMonitor
+      if (_requestUpdateMonitor) {
+        ;(this.vm.runtime as LppCompatibleRuntime).requestUpdateMonitor =
+          state => {
+            const value = state.get('value')
+            const id = state.get('id')
+            const unwrapped = Wrapper.unwrap(value)
+            if (
+              (unwrapped instanceof LppValue ||
+                unwrapped instanceof LppReference) &&
+              typeof id === 'string'
+            ) {
+              const compatibleRuntime = this.vm.runtime as LppCompatibleRuntime
+              if (compatibleRuntime.getMonitorState) {
+                const actualValue = ensureValue(unwrapped)
+                const blockMonitorState = compatibleRuntime
+                  .getMonitorState()
+                  .get(id)
+                if (
+                  typeof blockMonitorState === 'object' &&
+                  blockMonitorState !== null
+                ) {
+                  const compatibleState = blockMonitorState as Record<
+                    string,
+                    unknown
+                  >
+                  if (compatibleState.cachedValue !== unwrapped) {
+                    const elements = document.querySelectorAll(
+                      `[class*="monitor_monitor-container"]`
+                    )
+                    elements.forEach(element => {
+                      const reactElement = Object.values(element).find(v =>
+                        Reflect.has(v, 'children')
+                      )
+                      const props = reactElement?.children?.props
+                      const variableId = props?.id
+                      if (props && id === variableId) {
+                        const patch = () => {
+                          const temp = element.querySelector('[class*="value"]')
+                          if (temp instanceof HTMLElement) {
+                            temp.style.textAlign = 'left'
+                            while (temp.firstChild)
+                              temp.removeChild(temp.firstChild)
+                            temp.append(
+                              Inspector(
+                                this.Blockly,
+                                this.vm,
+                                this.formatMessage.bind(this),
+                                actualValue
+                              )
+                            )
+                          }
+                        }
+                        const hook = (
+                          target: object,
+                          key: string | symbol,
+                          fn: () => void
+                        ) => {
+                          const originalFn = Reflect.get(target, key)
+                          if (typeof originalFn === 'function') {
+                            Reflect.set(
+                              target,
+                              key,
+                              function (
+                                this: unknown,
+                                ...args: never[]
+                              ): unknown {
+                                const res = originalFn.apply(this, args)
+                                fn()
+                                return res
+                              }
+                            )
+                          }
+                        }
+                        patch()
+                        // TODO: a better way to do this.
+                        /*
+                        Reference:
+                        props.onSetModeToSlider
+                        this.props.vm.runtime.requestUpdateMonitor(Map({
+                          id: this.props.id,
+                          mode: 'slider'
+                        }))
+                        */
+                        ;[
+                          'onSetModeToDefault',
+                          'onSetModeToLarge',
+                          'onSetModeToSlider'
+                        ].forEach(v => hook(props, v, patch))
+                      }
+                    })
+                    compatibleState.cachedValue = unwrapped
+                  }
+                  // return true
+                }
+              }
+            }
+            return _requestUpdateMonitor.call(this.vm.runtime, state)
+          }
       }
       // Patch Function.
       Global.Function.set(
@@ -306,12 +408,12 @@ declare let Scratch: ScratchContext
               )
               return new LppReturn(fn)
             }
-            const Blocks = this.runtime.flyoutBlocks
+            const Blocks = this.vm.runtime.flyoutBlocks
               .constructor as BlocksConstructor
-            const blocks = new Blocks(this.runtime, true)
+            const blocks = new Blocks(this.vm.runtime, true)
             Serialization.deserializeBlock(blocks, val.script)
             const fn = new LppFunction((self, args) => {
-              const Target = this.runtime.targets[0]
+              const Target = this.vm.runtime.targets[0]
                 .constructor as TargetConstructor
               let resolveFn: ((v: LppReturnOrException) => void) | undefined
               let syncResult: LppReturnOrException | undefined
@@ -319,7 +421,7 @@ declare let Scratch: ScratchContext
               const block = blocks.getBlock(val.block ?? '')
               if (!block?.inputs?.SUBSTACK)
                 return new LppReturn(new LppConstant(null))
-              const thread = this.runtime._pushThread(
+              const thread = this.vm.runtime._pushThread(
                 block.inputs.SUBSTACK.block,
                 target
               ) as Thread
@@ -383,7 +485,7 @@ declare let Scratch: ScratchContext
       )
       attachType()
       // Export
-      this.runtime.lpp = {
+      ;(this.vm.runtime as LppCompatibleRuntime).lpp = {
         LppValue,
         LppReference,
         LppConstant,
@@ -957,12 +1059,12 @@ declare let Scratch: ScratchContext
           let resolveFn: ((v: LppReturnOrException) => void) | undefined
           let syncResult: LppReturnOrException | undefined
           const target =
-            this.runtime.getTargetById(targetId) ??
+            this.vm.runtime.getTargetById(targetId) ??
             this.createDummyTarget(Target, blocks)
           if (!block.inputs.SUBSTACK)
             return new LppReturn(new LppConstant(null))
           const id = block.inputs.SUBSTACK.block
-          const thread = this.runtime._pushThread(id, target) as Thread
+          const thread = this.vm.runtime._pushThread(id, target) as Thread
           thread.lpp = new LppFunctionContext(
             context,
             self ?? new LppConstant(null),
@@ -1111,7 +1213,7 @@ declare let Scratch: ScratchContext
         const id = block.inputs.SUBSTACK?.block
         if (!id) return
         const parentThread = thread as Thread
-        const scopeThread = this.runtime._pushThread(id, target) as Thread
+        const scopeThread = this.vm.runtime._pushThread(id, target) as Thread
         let resolveFn: (() => void) | undefined
         let resolved = false
         scopeThread.lpp = new LppContext(
@@ -1165,7 +1267,7 @@ declare let Scratch: ScratchContext
         if (!id) return
         const captureId = block.inputs.SUBSTACK_2?.block
         const parentThread = thread as Thread
-        const tryThread = this.runtime._pushThread(id, target) as Thread
+        const tryThread = this.vm.runtime._pushThread(id, target) as Thread
         let triggered = false
         let resolveFn: (() => void) | undefined
         let resolved = false
@@ -1195,7 +1297,7 @@ declare let Scratch: ScratchContext
               error.set('stack', traceback)
             }
             dest.assign(error)
-            const catchThread = this.runtime._pushThread(
+            const catchThread = this.vm.runtime._pushThread(
               captureId,
               target
             ) as Thread
@@ -1253,7 +1355,7 @@ declare let Scratch: ScratchContext
         !thread.target.blocks.getBlock(thread.peekStack())?.next &&
         value !== undefined
       ) {
-        this.runtime.visualReport(thread.peekStack(), value)
+        this.vm.runtime.visualReport(thread.peekStack(), value)
       }
       return value
     }
@@ -1276,7 +1378,7 @@ declare let Scratch: ScratchContext
               stack,
               thread.target.sprite.clones[0].id
             )
-            this.runtime.stopAll()
+            this.vm.runtime.stopAll()
           }
         }
       }
@@ -1288,7 +1390,7 @@ declare let Scratch: ScratchContext
      */
     private handleException(e: LppException): never {
       warnException(this.Blockly, this.vm, this.formatMessage.bind(this), e)
-      this.runtime.stopAll()
+      this.vm.runtime.stopAll()
       throw new Error('lpp: user exception')
     }
     /**
@@ -1358,7 +1460,7 @@ declare let Scratch: ScratchContext
             v => args === v._argValues
           )?.id
       const block = id
-        ? container.getBlock(id) ?? this.runtime.flyoutBlocks.getBlock(id)
+        ? container.getBlock(id) ?? this.vm.runtime.flyoutBlocks.getBlock(id)
         : undefined
       if (!block) {
         throw new Error('lpp: cannot get active block')
@@ -1390,7 +1492,7 @@ declare let Scratch: ScratchContext
           blocks,
           name: ''
         },
-        this.runtime
+        this.vm.runtime
       )
       target.id = ''
       const warnFn = () => {
@@ -1413,7 +1515,7 @@ declare let Scratch: ScratchContext
      */
     private stepThread(thread: Thread) {
       const callerThread = this.util?.thread as Thread
-      this.runtime.sequencer.stepThread(thread)
+      this.vm.runtime.sequencer.stepThread(thread)
       if (this.util && callerThread) this.util.thread = callerThread // restore interpreter context
       if (
         thread.isCompiled &&
@@ -1425,7 +1527,7 @@ declare let Scratch: ScratchContext
         callerThread.generator = {
           next: () => {}
         }
-        this.runtime.sequencer.stepThread(callerThread) // restore compiler context (globalState)
+        this.vm.runtime.sequencer.stepThread(callerThread) // restore compiler context (globalState)
         callerThread.generator = orig
       }
     }

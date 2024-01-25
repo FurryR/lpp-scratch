@@ -21,7 +21,7 @@ import type * as ScratchBlocks from 'blockly/core'
  * @returns Element.
  */
 export function Inspector(
-  Blockly: BlocklyInstance,
+  Blockly: BlocklyInstance | undefined,
   vm: VM,
   formatMessage: (id: string) => string,
   value: LppValue
@@ -147,6 +147,7 @@ export function Inspector(
       const traceback = document.createElement('span')
       traceback.classList.add('lpp-code')
       if (
+        Blockly &&
         value.target &&
         value.block &&
         vm.runtime.getTargetById(value.target)
@@ -228,6 +229,7 @@ export function Inspector(
       code = Dialog.Text(value.value.size === 0 ? '{}' : '{...}', 'lpp-code')
     }
     if (
+      Blockly &&
       value instanceof LppFunction &&
       hasMetadata(value) &&
       value.target &&

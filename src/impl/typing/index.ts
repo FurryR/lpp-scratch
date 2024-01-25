@@ -59,6 +59,8 @@ export interface LppCompatibleRuntime extends VM.Runtime {
     version: string
     global: typeof global
   }
+  requestUpdateMonitor?(state: Map<string, unknown>): boolean
+  getMonitorState?(): Map<string, unknown>
   compilerOptions?: {
     enabled: boolean
   }
