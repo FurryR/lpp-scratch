@@ -75,15 +75,15 @@ declare let Scratch: ScratchContext
     /**
      * Virtual machine instance.
      */
-    vm: VM
+    readonly vm: VM
     /**
      * ScratchBlocks instance.
      */
-    Blockly?: BlocklyInstance
+    readonly Blockly?: BlocklyInstance
     /**
      * Blockly extension.
      */
-    extension: Extension
+    readonly extension: Extension
     /**
      * Scratch util.
      */
@@ -93,14 +93,13 @@ declare let Scratch: ScratchContext
      * @param originalRuntime Scratch runtime.
      */
     constructor(originalRuntime: VM.Runtime) {
-      // this.vm.runtime = runtime as LppCompatibleRuntime
-      const compatibleRuntime = originalRuntime as LppCompatibleRuntime
+      const runtime = originalRuntime as LppCompatibleRuntime
       this.Blockly = undefined
       Scratch.translate.setup(locale)
       // step 1: get virtual machine instance
       let virtualMachine: VM | undefined
-      if (compatibleRuntime._events['QUESTION'] instanceof Array) {
-        for (const value of compatibleRuntime._events['QUESTION']) {
+      if (runtime._events['QUESTION'] instanceof Array) {
+        for (const value of runtime._events['QUESTION']) {
           const v = hijack(value) as
             | {
                 props?: {
@@ -113,9 +112,9 @@ declare let Scratch: ScratchContext
             break
           }
         }
-      } else if (compatibleRuntime._events['QUESTION']) {
+      } else if (runtime._events['QUESTION']) {
         virtualMachine = (
-          hijack(compatibleRuntime._events['QUESTION']) as
+          hijack(runtime._events['QUESTION']) as
             | {
                 props?: {
                   vm?: VM
@@ -204,8 +203,8 @@ declare let Scratch: ScratchContext
         }
       }
       // Ignore SAY and QUESTION calls on dummy target.
-      const _emit = this.vm.runtime.emit
-      this.vm.runtime.emit = (event: string, ...args: unknown[]) => {
+      const _emit = runtime.emit
+      runtime.emit = (event: string, ...args: unknown[]) => {
         const blacklist = ['SAY', 'QUESTION']
         if (
           blacklist.includes(event) &&
@@ -218,11 +217,11 @@ declare let Scratch: ScratchContext
         }
         return (
           _emit as (this: VM.Runtime, event: string, ...args: unknown[]) => void
-        ).call(this.vm.runtime, event, ...args)
+        ).call(runtime, event, ...args)
       }
       // Patch visualReport.
-      const _visualReport = this.vm.runtime.visualReport
-      this.vm.runtime.visualReport = (blockId: string, value: unknown) => {
+      const _visualReport = runtime.visualReport
+      runtime.visualReport = (blockId: string, value: unknown) => {
         const value2 = Wrapper.unwrap(value)
         if (
           (value2 instanceof LppValue || value2 instanceof LppReference) &&
@@ -242,113 +241,138 @@ declare let Scratch: ScratchContext
             value2 instanceof LppConstant ? 'center' : 'left'
           )
         } else {
-          return _visualReport.call(this.vm.runtime, blockId, value)
+          return _visualReport.call(runtime, blockId, value)
         }
       }
       // Experimental feature: monitor with inspector
       console.log(
         '🧪 You are currently using a experimental feature: monitor with inspector. This is very unstable and still under development at current.'
       )
-      const _requestUpdateMonitor = (this.vm.runtime as LppCompatibleRuntime)
-        .requestUpdateMonitor
+      const _requestUpdateMonitor = runtime.requestUpdateMonitor
       if (_requestUpdateMonitor) {
-        ;(this.vm.runtime as LppCompatibleRuntime).requestUpdateMonitor =
-          state => {
-            const value = state.get('value')
-            const id = state.get('id')
-            const unwrapped = Wrapper.unwrap(value)
-            if (
-              (unwrapped instanceof LppValue ||
-                unwrapped instanceof LppReference) &&
-              typeof id === 'string'
-            ) {
-              const compatibleRuntime = this.vm.runtime as LppCompatibleRuntime
-              if (compatibleRuntime.getMonitorState) {
-                const actualValue = ensureValue(unwrapped)
-                const blockMonitorState = compatibleRuntime
-                  .getMonitorState()
-                  .get(id)
-                if (
-                  typeof blockMonitorState === 'object' &&
-                  blockMonitorState !== null
-                ) {
-                  const compatibleState = blockMonitorState as Record<
-                    string,
-                    unknown
-                  >
-                  if (compatibleState.cachedValue !== unwrapped) {
-                    const elements = document.querySelectorAll(
-                      `[class*="monitor_monitor-container"]`
-                    )
-                    elements.forEach(element => {
-                      const reactElement = Object.values(element).find(v =>
-                        Reflect.has(v, 'children')
-                      )
-                      const props = reactElement?.children?.props
-                      const variableId = props?.id
-                      if (props && id === variableId) {
-                        const patch = () => {
-                          const temp = element.querySelector('[class*="value"]')
-                          if (temp instanceof HTMLElement) {
-                            temp.style.textAlign = 'left'
-                            while (temp.firstChild)
-                              temp.removeChild(temp.firstChild)
-                            temp.append(
-                              Inspector(
-                                this.Blockly,
-                                this.vm,
-                                this.formatMessage.bind(this),
-                                actualValue
-                              )
-                            )
-                          }
-                        }
-                        const hook = (
-                          target: object,
-                          key: string | symbol,
-                          fn: () => void
-                        ) => {
-                          const originalFn = Reflect.get(target, key)
-                          if (typeof originalFn === 'function') {
-                            Reflect.set(
-                              target,
-                              key,
-                              function (
-                                this: unknown,
-                                ...args: never[]
-                              ): unknown {
-                                const res = originalFn.apply(this, args)
-                                fn()
-                                return res
-                              }
-                            )
-                          }
-                        }
-                        patch()
-                        // TODO: a better way to do this.
-                        /*
-                        Reference:
-                        props.onSetModeToSlider
-                        this.props.vm.runtime.requestUpdateMonitor(Map({
-                          id: this.props.id,
-                          mode: 'slider'
-                        }))
-                        */
-                        ;[
-                          'onSetModeToDefault',
-                          'onSetModeToLarge',
-                          'onSetModeToSlider'
-                        ].forEach(v => hook(props, v, patch))
-                      }
-                    })
-                    compatibleState.cachedValue = unwrapped
-                  }
-                  // return true
-                }
+        const patchMonitorValue = (element: HTMLElement, value: unknown) => {
+          const valueElement = element.querySelector('[class*="value"]')
+          if (valueElement instanceof HTMLElement) {
+            const internalInstance = Object.values(valueElement).find(
+              v =>
+                typeof v === 'object' &&
+                v !== null &&
+                Reflect.has(v, 'stateNode')
+            )
+            if (value instanceof LppValue) {
+              const inspector = Inspector(
+                this.Blockly,
+                this.vm,
+                this.formatMessage.bind(this),
+                value
+              )
+              valueElement.style.textAlign = 'left'
+              valueElement.style.backgroundColor = 'rgb(30, 30, 30)'
+              valueElement.style.color = '#eeeeee'
+              while (valueElement.firstChild)
+                valueElement.removeChild(valueElement.firstChild)
+              valueElement.append(inspector)
+            } else {
+              if (internalInstance) {
+                valueElement.style.textAlign = ''
+                valueElement.style.backgroundColor =
+                  internalInstance.memoizedProps?.style?.background ?? ''
+                valueElement.style.color =
+                  internalInstance.memoizedProps?.style?.color ?? ''
+                while (valueElement.firstChild)
+                  valueElement.removeChild(valueElement.firstChild)
+                valueElement.append(String(value))
               }
             }
-            return _requestUpdateMonitor.call(this.vm.runtime, state)
           }
+        }
+        const getMonitorById = (id: string): HTMLElement | null => {
+          const elements = document.querySelectorAll(
+            `[class*="monitor_monitor-container"]`
+          )
+          for (const element of Object.values(elements)) {
+            const internalInstance = Object.values(element).find(
+              v =>
+                typeof v === 'object' &&
+                v !== null &&
+                Reflect.has(v, 'children')
+            )
+            if (internalInstance) {
+              const props = internalInstance?.children?.props
+              if (id === props?.id) return element as HTMLElement
+            }
+          }
+          return null
+        }
+        const monitorMap: Map<
+          string,
+          {
+            value?: LppValue
+            mode: string
+          }
+        > = new Map()
+        runtime.requestUpdateMonitor = state => {
+          const id = state.get('id')
+          if (typeof id === 'string') {
+            const monitorValue = state.get('value')
+            const monitorMode = state.get('mode')
+            const monitorVisible = state.get('visible')
+            const cache = monitorMap.get(id)
+            if (typeof monitorMode === 'string' && cache) {
+              // Update the monitor when the mode changes.
+              // Since value update is followed by monitorMode, we just set value to `undefined`.
+              cache.mode = monitorMode
+              cache.value = undefined
+            } else if (monitorValue !== undefined) {
+              // Update the monitor when the value changes.
+              const unwrappedValue = Wrapper.unwrap(monitorValue)
+              if (
+                unwrappedValue instanceof LppValue ||
+                unwrappedValue instanceof LppReference
+              ) {
+                const actualValue = ensureValue(unwrappedValue)
+                if (!cache || cache.value !== actualValue) {
+                  requestAnimationFrame(() => {
+                    const monitor = getMonitorById(id)
+                    if (monitor) {
+                      patchMonitorValue(monitor, actualValue)
+                    }
+                  })
+                  if (!cache) {
+                    monitorMap.set(id, {
+                      value: actualValue,
+                      mode: (() => {
+                        if (runtime.getMonitorState) {
+                          const monitorCached = runtime
+                            .getMonitorState()
+                            .get(id) as Map<string, unknown> | undefined
+                          if (monitorCached) {
+                            const mode = monitorCached.get('mode')
+                            return typeof mode === 'string' ? mode : 'normal'
+                          }
+                        }
+                        return 'normal'
+                      })()
+                    })
+                  } else cache.value = actualValue
+                }
+                return true
+              } else {
+                // Remove cachedValue from database.
+                if (monitorMap.has(id)) {
+                  const monitor = getMonitorById(id)
+                  if (monitor) {
+                    patchMonitorValue(monitor, monitorValue)
+                  }
+                  monitorMap.delete(id)
+                }
+              }
+            } else if (monitorVisible !== undefined) {
+              if (!monitorVisible) monitorMap.delete(id)
+            }
+          }
+          return _requestUpdateMonitor.call(runtime, state)
+        }
       }
       // Patch Function.
       Global.Function.set(
@@ -408,20 +432,21 @@ declare let Scratch: ScratchContext
               )
               return new LppReturn(fn)
             }
-            const Blocks = this.vm.runtime.flyoutBlocks
-              .constructor as BlocksConstructor
-            const blocks = new Blocks(this.vm.runtime, true)
+            const Blocks = runtime.flyoutBlocks.constructor as BlocksConstructor
+            const blocks = new Blocks(runtime, true)
             Serialization.deserializeBlock(blocks, val.script)
             const fn = new LppFunction((self, args) => {
-              const Target = this.vm.runtime.targets[0]
-                .constructor as TargetConstructor
+              const Target = runtime.getTargetForStage()?.constructor as
+                | TargetConstructor
+                | undefined
+              if (!Target) throw new Error('lpp: project is disposed')
               let resolveFn: ((v: LppReturnOrException) => void) | undefined
               let syncResult: LppReturnOrException | undefined
               const target = this.createDummyTarget(Target, blocks)
               const block = blocks.getBlock(val.block ?? '')
               if (!block?.inputs?.SUBSTACK)
                 return new LppReturn(new LppConstant(null))
-              const thread = this.vm.runtime._pushThread(
+              const thread = runtime._pushThread(
                 block.inputs.SUBSTACK.block,
                 target
               ) as Thread
@@ -485,7 +510,7 @@ declare let Scratch: ScratchContext
       )
       attachType()
       // Export
-      ;(this.vm.runtime as LppCompatibleRuntime).lpp = {
+      runtime.lpp = {
         LppValue,
         LppReference,
         LppConstant,

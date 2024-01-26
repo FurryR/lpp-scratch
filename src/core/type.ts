@@ -100,7 +100,7 @@ export abstract class LppValue {
 /**
  * Lpp compatible object (with scope).
  */
-export class LppReference {
+export class LppReference implements LppValue {
   /**
    * Parent object.
    */

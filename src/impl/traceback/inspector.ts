@@ -167,13 +167,15 @@ export function Inspector(
             )[0]
           vm.setEditingTarget(target)
           workspace.centerOnBlock(block, true)
-          Blockly.DropDownDiv.hideWithoutAnimation()
-          Blockly.DropDownDiv.clearContent()
-          Blockly.DropDownDiv.getContentDiv().append(box)
-          Blockly.DropDownDiv.showPositionedByBlock(
-            workspace as unknown as ScratchBlocks.Field<unknown>,
-            workspace.getBlockById(block) as ScratchBlocks.BlockSvg
-          )
+          if (box) {
+            Blockly.DropDownDiv.hideWithoutAnimation()
+            Blockly.DropDownDiv.clearContent()
+            Blockly.DropDownDiv.getContentDiv().append(box)
+            Blockly.DropDownDiv.showPositionedByBlock(
+              workspace as unknown as ScratchBlocks.Field<unknown>,
+              workspace.getBlockById(block) as ScratchBlocks.BlockSvg
+            )
+          }
         })
       } else {
         traceback.classList.add('lpp-inspector-null')
@@ -247,13 +249,15 @@ export function Inspector(
           )[0]
         vm.setEditingTarget(target)
         workspace.centerOnBlock(block, true)
-        Blockly.DropDownDiv.hideWithoutAnimation()
-        Blockly.DropDownDiv.clearContent()
-        Blockly.DropDownDiv.getContentDiv().append(box)
-        Blockly.DropDownDiv.showPositionedByBlock(
-          workspace as unknown as ScratchBlocks.Field<unknown>,
-          workspace.getBlockById(block) as ScratchBlocks.BlockSvg
-        )
+        if (box) {
+          Blockly.DropDownDiv.hideWithoutAnimation()
+          Blockly.DropDownDiv.clearContent()
+          Blockly.DropDownDiv.getContentDiv().append(box)
+          Blockly.DropDownDiv.showPositionedByBlock(
+            workspace as unknown as ScratchBlocks.Field<unknown>,
+            workspace.getBlockById(block) as ScratchBlocks.BlockSvg
+          )
+        }
       })
     } else {
       code.addEventListener('click', () => {
