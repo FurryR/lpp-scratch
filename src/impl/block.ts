@@ -339,9 +339,7 @@ export function defineExtension(
                 ['Array', 'Array'],
                 ['Object', 'Object'],
                 ['Function', 'Function'],
-                ['Promise', 'Promise'],
-                ['Generator', 'Generator'],
-                ['AsyncGenerator', 'AsyncGenerator']
+                ['Promise', 'Promise']
               ]) as ScratchBlocks.Field<string>,
               'value'
             )

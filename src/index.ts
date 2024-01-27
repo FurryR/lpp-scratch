@@ -48,7 +48,7 @@ import { PromiseProxy } from './impl/promise'
 declare let Scratch: ScratchContext
 ;(function (Scratch: ScratchContext) {
   const color = '#808080'
-  const lppVersion = 'Development (for Turbowarp / Cocrea users)'
+  const lppVersion = 'Daily build'
   // Translations.
 
   if (Scratch.extensions.unsandboxed === false) {
