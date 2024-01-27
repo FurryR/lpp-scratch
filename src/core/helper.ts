@@ -279,10 +279,7 @@ export function processThenReturn(
               resolve,
               reject
             )
-            if (isPromise(res)) {
-              return res.then(() => new LppReturn(new LppConstant(null)))
-            }
-            return new LppReturn(new LppConstant(null))
+            return withValue(res, () => new LppReturn(new LppConstant(null)))
           }),
           new LppFunction((_, args) => {
             // reject
@@ -290,18 +287,24 @@ export function processThenReturn(
             return new LppReturn(new LppConstant(null))
           })
         ])
-        if (isPromise(res)) {
-          return res.then(value => {
-            // PromiseLike should return a PromiseLike. Here we do not care about that.
-            if (value instanceof LppException) {
-              reject(value.value)
-            }
-          })
-        }
-        return undefined
+        return withValue(res, value => {
+          // PromiseLike should return a PromiseLike. Here we do not care about that.
+          return value instanceof LppException
+            ? void reject(value.value)
+            : undefined
+        })
       }
     }
     return void resolve(returnValue.value)
   }
   return void reject(returnValue.value)
+}
+export function withValue<T, T2>(
+  v: T | PromiseLike<T>,
+  fn: (value: T) => T2
+): T2 | PromiseLike<T2> {
+  if (isPromise(v)) {
+    return v.then(v => fn(v))
+  }
+  return fn(v)
 }

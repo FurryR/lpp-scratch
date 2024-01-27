@@ -11,9 +11,9 @@ import {
   compare,
   ensureValue,
   equal,
-  isPromise,
   mathOp,
-  processThenReturn
+  processThenReturn,
+  withValue
 } from './helper'
 export class LppError extends Error {
   /**
@@ -926,13 +926,9 @@ export class LppFunction extends LppObject {
       return exception
     }
     const obj: LppFunction = new LppFunction((self, args) => {
-      const res = execute(self, args)
-      if (isPromise(res)) {
-        return res.then(value =>
-          addNativeTraceback(value, obj, self ?? new LppConstant(null), args)
-        )
-      }
-      return addNativeTraceback(res, obj, self ?? new LppConstant(null), args)
+      return withValue(execute(self, args), value =>
+        addNativeTraceback(value, obj, self ?? new LppConstant(null), args)
+      )
     }, prototype)
     return obj
   }
@@ -1050,12 +1046,7 @@ export class LppFunction extends LppObject {
       if (result instanceof LppException) return result
       return new LppReturn(obj)
     }
-    if (isPromise(res)) {
-      return res.then(result => {
-        return process(result)
-      })
-    }
-    return process(res)
+    return withValue(res, result => process(result))
   }
   /**
    * @returns toString for visualReport.
@@ -1094,10 +1085,9 @@ export class LppPromise extends LppObject {
           ? value => {
               if (value instanceof LppValue) {
                 const res = resolveFn.apply(this, [value])
-                if (isPromise(res)) {
-                  return res.then(v => processThenReturn(v, resolve, reject))
-                }
-                return processThenReturn(res, resolve, reject)
+                return withValue(res, v =>
+                  processThenReturn(v, resolve, reject)
+                ) as PromiseLike<void>
               }
               throw new Error('lpp: unknown result')
             }
@@ -1106,10 +1096,9 @@ export class LppPromise extends LppObject {
           ? err => {
               if (err instanceof LppValue) {
                 const res = rejectFn.apply(this, [err])
-                if (isPromise(res)) {
-                  return res.then(v => processThenReturn(v, resolve, reject))
-                }
-                return processThenReturn(res, resolve, reject)
+                return withValue(res, v =>
+                  processThenReturn(v, resolve, reject)
+                ) as PromiseLike<void>
               }
               throw err
             }
@@ -1128,10 +1117,9 @@ export class LppPromise extends LppObject {
       this.pm.catch(err => {
         if (err instanceof LppValue) {
           const res = rejectFn.apply(this, [err])
-          if (isPromise(res)) {
-            return res.then(v => processThenReturn(v, resolve, reject))
-          }
-          return processThenReturn(res, resolve, reject)
+          return withValue(res, v =>
+            processThenReturn(v, resolve, reject)
+          ) as PromiseLike<void>
         }
         throw err
       })
@@ -1173,10 +1161,7 @@ export class LppPromise extends LppObject {
       rejectFn = reject
     })
     const res = fn(resolveFn, rejectFn)
-    if (isPromise(res)) {
-      return res.then(() => new LppPromise(pm))
-    }
-    return new LppPromise(pm)
+    return withValue(res, () => new LppPromise(pm))
   }
   constructor(public pm: Promise<LppValue>) {
     const GlobalPromise = global.get('Promise')

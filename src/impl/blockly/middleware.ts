@@ -1,33 +1,39 @@
-import { BlockDescriptor } from './extension'
+import { BlockDescriptor, BlockMap } from './extension'
 import { Block, BlocklyInstance } from './typing'
 
 function _ReporterBase(
   fn: (
-    this: BlockDescriptor,
-    instance: BlocklyInstance,
-    block: Block,
-    ...args: never[]
-  ) => void,
+    Blockly: BlocklyInstance,
+    block: Block
+  ) => BlockMap | ((...args: never[]) => unknown),
   type: 'square' | 'round'
-): (
-  this: BlockDescriptor,
-  instance: BlocklyInstance,
-  block: Block,
-  ...args: never[]
-) => void {
-  return function (
-    this: BlockDescriptor,
-    instance: BlocklyInstance,
-    block: Block,
-    ...args: never[]
-  ) {
+): BlockDescriptor {
+  const prepatch = (Blockly: BlocklyInstance, block: Block) => {
     block.setOutput(true, 'String')
     block.setOutputShape(
       type === 'square'
-        ? instance.OUTPUT_SHAPE_SQUARE
-        : instance.OUTPUT_SHAPE_ROUND
+        ? Blockly.OUTPUT_SHAPE_SQUARE
+        : Blockly.OUTPUT_SHAPE_ROUND
     )
-    return fn.call(this, instance, block, ...args)
+  }
+  return {
+    init(Blockly, block) {
+      const map = fn(Blockly, block)
+      if (typeof map === 'function') {
+        return (...args: never[]) => {
+          prepatch(Blockly, block)
+          return map(...args)
+        }
+      } else if (map.init) {
+        const _init = map.init
+        map.init = (...args: never[]) => {
+          prepatch(Blockly, block)
+          return _init(...args)
+        }
+      }
+      return map
+    },
+    type: 'reporter'
   }
 }
 /**
@@ -38,28 +44,34 @@ function _ReporterBase(
  */
 export function Command(
   fn: (
-    this: BlockDescriptor,
-    instance: BlocklyInstance,
-    block: Block,
-    ...args: never[]
-  ) => void,
+    Blockly: BlocklyInstance,
+    block: Block
+  ) => BlockMap | ((...args: never[]) => unknown),
   isTerminal: boolean = false
-): (
-  this: BlockDescriptor,
-  instance: BlocklyInstance,
-  block: Block,
-  ...args: never[]
-) => void {
-  return function (
-    this: BlockDescriptor,
-    instance: BlocklyInstance,
-    block: Block,
-    ...args: never[]
-  ) {
+): BlockDescriptor {
+  const prepatch = (Blockly: BlocklyInstance, block: Block) => {
     block.setNextStatement(!isTerminal)
     block.setPreviousStatement(true)
-    block.setOutputShape(instance.OUTPUT_SHAPE_SQUARE)
-    return fn.call(this, instance, block, ...args)
+    block.setOutputShape(Blockly.OUTPUT_SHAPE_SQUARE)
+  }
+  return {
+    init(Blockly, block) {
+      const map = fn(Blockly, block)
+      if (typeof map === 'function') {
+        return (...args: never[]) => {
+          prepatch(Blockly, block)
+          return map(...args)
+        }
+      } else if (map.init) {
+        const _init = map.init
+        map.init = (...args: never[]) => {
+          prepatch(Blockly, block)
+          return _init(...args)
+        }
+      }
+      return map
+    },
+    type: 'command'
   }
 }
 /**
@@ -68,17 +80,10 @@ export function Command(
 export namespace Reporter {
   export function Square(
     fn: (
-      this: BlockDescriptor,
-      instance: BlocklyInstance,
-      block: Block,
-      ...args: never[]
-    ) => void
-  ): (
-    this: BlockDescriptor,
-    instance: BlocklyInstance,
-    block: Block,
-    ...args: never[]
-  ) => void {
+      Blockly: BlocklyInstance,
+      block: Block
+    ) => BlockMap | ((...args: never[]) => unknown)
+  ): BlockDescriptor {
     return _ReporterBase(fn, 'square')
   }
   /**
@@ -88,17 +93,10 @@ export namespace Reporter {
    */
   export function Round(
     fn: (
-      this: BlockDescriptor,
-      instance: BlocklyInstance,
-      block: Block,
-      ...args: never[]
-    ) => void
-  ): (
-    this: BlockDescriptor,
-    instance: BlocklyInstance,
-    block: Block,
-    ...args: never[]
-  ) => void {
+      Blockly: BlocklyInstance,
+      block: Block
+    ) => BlockMap | ((...args: never[]) => unknown)
+  ): BlockDescriptor {
     return _ReporterBase(fn, 'round')
   }
 }

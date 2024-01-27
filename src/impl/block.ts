@@ -41,8 +41,8 @@ function isMutableBlock(block: Block): block is MutableBlock {
 
 /**
  * Generate FieldImageButton.
- * @param Blockly Blockly instance.
- * @returns FieldImageButton instance.
+ * @param Blockly Blockly Blockly.
+ * @returns FieldImageButton Blockly.
  * @warning This section is ported from raw JavaScript.
  * @author CST1229
  */
@@ -178,7 +178,7 @@ const minusImage =
 /**
  * Defines extension.
  * @param color Extension color.
- * @param runtime Runtime instance.
+ * @param runtime Runtime Blockly.
  * @param formatMessage Function to format message.
  * @returns Extension.
  */
@@ -190,7 +190,7 @@ export function defineExtension(
   /// code from https://github.com/google/blockly-samples/blob/master/plugins/block-plus-minus & Open Roberta Lab
   /**
    * Generates plus icon.
-   * @param Blockly Blockly instance.
+   * @param Blockly Blockly Blockly.
    * @param block Target block.
    * @returns Field.
    */
@@ -234,7 +234,7 @@ export function defineExtension(
   }
   /**
    * Generates minus icon.
-   * @param Blockly Blockly instance.
+   * @param Blockly Blockly Blockly.
    * @param block Target block.
    * @returns Field.
    */
@@ -281,7 +281,7 @@ export function defineExtension(
   }
   /**
    * Update buttons for mutable blocks.
-   * @param Blockly Blockly instance.
+   * @param Blockly Blockly Blockly.
    * @param block Target block.
    */
   const updateButton = (Blockly: BlocklyInstance, block: MutableBlock) => {
@@ -329,10 +329,10 @@ export function defineExtension(
       new Category(() => `#️⃣ ${formatMessage('lpp.category.builtin')}`)
         .register(
           'builtinType',
-          Reporter.Square((instance, block) => {
+          Reporter.Square((Blockly, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.builtin.type'))
             block.appendDummyInput().appendField(
-              new instance.FieldDropdown([
+              new Blockly.FieldDropdown([
                 ['Boolean', 'Boolean'],
                 ['Number', 'Number'],
                 ['String', 'String'],
@@ -349,10 +349,10 @@ export function defineExtension(
         )
         .register(
           'builtinError',
-          Reporter.Square((instance, block) => {
+          Reporter.Square((Blockly, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.builtin.error'))
             block.appendDummyInput().appendField(
-              new instance.FieldDropdown([
+              new Blockly.FieldDropdown([
                 ['Error', 'Error'],
                 ['IllegalInvocationError', 'IllegalInvocationError'],
                 ['SyntaxError', 'SyntaxError']
@@ -363,10 +363,10 @@ export function defineExtension(
         )
         .register(
           'builtinUtility',
-          Reporter.Square((instance, block) => {
+          Reporter.Square((Blockly, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.builtin.error'))
             block.appendDummyInput().appendField(
-              new instance.FieldDropdown([
+              new Blockly.FieldDropdown([
                 ['JSON', 'JSON'],
                 ['Math', 'Math']
               ]) as ScratchBlocks.Field<string>,
@@ -380,10 +380,10 @@ export function defineExtension(
       new Category(() => `🚧 ${formatMessage('lpp.category.construct')}`)
         .register(
           'constructLiteral',
-          Reporter.Square((instance, block) => {
+          Reporter.Square((Blockly, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.construct.literal'))
             block.appendDummyInput().appendField(
-              new instance.FieldDropdown([
+              new Blockly.FieldDropdown([
                 ['null', 'null'],
                 ['true', 'true'],
                 ['false', 'false'],
@@ -396,7 +396,7 @@ export function defineExtension(
         )
         .register(
           'constructNumber',
-          Reporter.Square((_, block) => {
+          Reporter.Square((_, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.construct.Number'))
             Input.Text(block, 'BEGIN', [
               formatMessage('lpp.block.construct.Number'),
@@ -408,7 +408,7 @@ export function defineExtension(
         )
         .register(
           'constructString',
-          Reporter.Square((_, block) => {
+          Reporter.Square((_, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.construct.String'))
             Input.Text(block, 'BEGIN', [
               formatMessage('lpp.block.construct.String'),
@@ -418,149 +418,167 @@ export function defineExtension(
             Input.Text(block, 'END', `)`)
           })
         )
-        .register('constructArray', {
-          init: Reporter.Square((instance, block) => {
-            block.setTooltip(formatMessage('lpp.tooltip.construct.Array'))
-            const property = block as MutableBlock
-            Input.Text(block, 'BEGIN', '[')
-            /// Member
-            Input.Text(block, 'END', ']')
-            property.length = 0
-            updateButton(instance, property)
-          }),
-          mutationToDom(_, block) {
-            const elem = document.createElement('mutation')
-            if (isMutableBlock(block)) {
-              elem.setAttribute('length', String(block.length))
-            }
-            return elem
-          },
-          domToMutation(instance, block, mutation: HTMLElement) {
-            const length = parseInt(mutation.getAttribute('length') ?? '0', 10)
-            if (isMutableBlock(block)) {
-              if (length > block.length) {
-                for (let i = block.length; i < length; i++) {
-                  if (i > 0) {
-                    block.appendDummyInput(`COMMA_${i}`).appendField(',')
-                    block.moveInputBefore(`COMMA_${i}`, 'END')
-                  }
-                  Input.Any(block, `ARG_${i}`)
-                  block.moveInputBefore(`ARG_${i}`, 'END')
-                }
-              } else {
-                for (let i = length; i < block.length; i++) {
-                  block.removeInput(`ARG_${i}`, true)
-                  block.removeInput(`COMMA_${i}`, true)
-                }
-                cleanInputs(block)
+        .register(
+          'constructArray',
+          Reporter.Square((Blockly, block) => ({
+            init() {
+              block.setTooltip(formatMessage('lpp.tooltip.construct.Array'))
+              const property = block as MutableBlock
+              Input.Text(block, 'BEGIN', '[')
+              /// Member
+              Input.Text(block, 'END', ']')
+              property.length = 0
+              updateButton(Blockly, property)
+            },
+            mutationToDom() {
+              const elem = document.createElement('mutation')
+              if (isMutableBlock(block)) {
+                elem.setAttribute('length', String(block.length))
               }
-              block.length = length
-              updateButton(instance, block)
-            }
-          }
-        })
-        .register('constructObject', {
-          init: Reporter.Square((instance, block) => {
-            block.setTooltip(formatMessage('lpp.tooltip.construct.Object'))
-            const property = block as MutableBlock
-            Input.Text(block, 'BEGIN', '{')
-            /// Member
-            Input.Text(block, 'END', '}')
-            property.length = 0
-            updateButton(instance, property)
-          }),
-          mutationToDom(_, block) {
-            const elem = document.createElement('mutation')
-            if (isMutableBlock(block)) {
-              elem.setAttribute('length', String(block.length))
-            }
-            return elem
-          },
-          domToMutation(instance, block, mutation: HTMLElement) {
-            const length = parseInt(mutation.getAttribute('length') ?? '0', 10)
-            if (isMutableBlock(block)) {
-              if (length > block.length) {
-                for (let i = block.length; i < length; i++) {
-                  if (i > 0) {
-                    block.appendDummyInput(`COMMA_${i}`).appendField(',')
-                    block.moveInputBefore(`COMMA_${i}`, 'END')
+              return elem
+            },
+            domToMutation(mutation: HTMLElement) {
+              const length = parseInt(
+                mutation.getAttribute('length') ?? '0',
+                10
+              )
+              if (isMutableBlock(block)) {
+                if (length > block.length) {
+                  for (let i = block.length; i < length; i++) {
+                    if (i > 0) {
+                      block.appendDummyInput(`COMMA_${i}`).appendField(',')
+                      block.moveInputBefore(`COMMA_${i}`, 'END')
+                    }
+                    Input.Any(block, `ARG_${i}`)
+                    block.moveInputBefore(`ARG_${i}`, 'END')
                   }
-                  Input.String(block, `KEY_${i}`, '')
-                  Input.Text(block, `COLON_${i}`, ':')
-                  Input.Any(block, `VALUE_${i}`)
-                  block.moveInputBefore(`VALUE_${i}`, 'END')
-                  block.moveInputBefore(`COLON_${i}`, `VALUE_${i}`)
-                  block.moveInputBefore(`KEY_${i}`, `COLON_${i}`)
-                }
-              } else {
-                for (let i = length; i < block.length; i++) {
-                  block.removeInput(`KEY_${i}`, true)
-                  block.removeInput(`COLON_${i}`, true)
-                  block.removeInput(`VALUE_${i}`, true)
-                  block.removeInput(`COMMA_${i}`, true)
-                }
-                cleanInputs(block)
-              }
-              block.length = length
-              updateButton(instance, block)
-            }
-          }
-        })
-        .register('constructFunction', {
-          init: Reporter.Square((instance, block) => {
-            block.setTooltip(formatMessage('lpp.tooltip.construct.Function'))
-            const property = block as MutableBlock
-            Input.Text(block, 'BEGIN', [
-              formatMessage('lpp.block.construct.Function'),
-              '('
-            ])
-            /// Signature
-            Input.Text(block, 'END', ')')
-            Input.Statement(block, 'SUBSTACK')
-            property.length = 0
-            updateButton(instance, property)
-          }),
-          mutationToDom(_, block) {
-            const elem = document.createElement('mutation')
-            if (isMutableBlock(block)) {
-              elem.setAttribute('length', String(block.length))
-            }
-            return elem
-          },
-          domToMutation(instance, block, mutation: HTMLElement) {
-            const length = parseInt(mutation.getAttribute('length') ?? '0', 10)
-            if (isMutableBlock(block)) {
-              if (length > block.length) {
-                for (let i = block.length; i < length; i++) {
-                  if (i > 0) {
-                    block.appendDummyInput(`COMMA_${i}`).appendField(',')
-                    block.moveInputBefore(`COMMA_${i}`, 'END')
+                } else {
+                  for (let i = length; i < block.length; i++) {
+                    block.removeInput(`ARG_${i}`, true)
+                    block.removeInput(`COMMA_${i}`, true)
                   }
-                  Input.String(block, `ARG_${i}`, '')
-                  block.moveInputBefore(`ARG_${i}`, 'END')
+                  cleanInputs(block)
                 }
-              } else {
-                for (let i = length; i < block.length; i++) {
-                  block.removeInput(`ARG_${i}`, true)
-                  block.removeInput(`COMMA_${i}`, true)
-                }
-                cleanInputs(block)
+                block.length = length
+                updateButton(Blockly, block)
               }
-              block.length = length
-              updateButton(instance, block)
             }
-          }
-        })
+          }))
+        )
+        .register(
+          'constructObject',
+          Reporter.Square((Blockly, block) => ({
+            init() {
+              block.setTooltip(formatMessage('lpp.tooltip.construct.Object'))
+              const property = block as MutableBlock
+              Input.Text(block, 'BEGIN', '{')
+              /// Member
+              Input.Text(block, 'END', '}')
+              property.length = 0
+              updateButton(Blockly, property)
+            },
+            mutationToDom() {
+              const elem = document.createElement('mutation')
+              if (isMutableBlock(block)) {
+                elem.setAttribute('length', String(block.length))
+              }
+              return elem
+            },
+            domToMutation(mutation: HTMLElement) {
+              const length = parseInt(
+                mutation.getAttribute('length') ?? '0',
+                10
+              )
+              if (isMutableBlock(block)) {
+                if (length > block.length) {
+                  for (let i = block.length; i < length; i++) {
+                    if (i > 0) {
+                      block.appendDummyInput(`COMMA_${i}`).appendField(',')
+                      block.moveInputBefore(`COMMA_${i}`, 'END')
+                    }
+                    Input.String(block, `KEY_${i}`, '')
+                    Input.Text(block, `COLON_${i}`, ':')
+                    Input.Any(block, `VALUE_${i}`)
+                    block.moveInputBefore(`VALUE_${i}`, 'END')
+                    block.moveInputBefore(`COLON_${i}`, `VALUE_${i}`)
+                    block.moveInputBefore(`KEY_${i}`, `COLON_${i}`)
+                  }
+                } else {
+                  for (let i = length; i < block.length; i++) {
+                    block.removeInput(`KEY_${i}`, true)
+                    block.removeInput(`COLON_${i}`, true)
+                    block.removeInput(`VALUE_${i}`, true)
+                    block.removeInput(`COMMA_${i}`, true)
+                  }
+                  cleanInputs(block)
+                }
+                block.length = length
+                updateButton(Blockly, block)
+              }
+            }
+          }))
+        )
+        .register(
+          'constructFunction',
+          Reporter.Square((Blockly, block) => ({
+            init() {
+              block.setTooltip(formatMessage('lpp.tooltip.construct.Function'))
+              const property = block as MutableBlock
+              Input.Text(block, 'BEGIN', [
+                formatMessage('lpp.block.construct.Function'),
+                '('
+              ])
+              /// Signature
+              Input.Text(block, 'END', ')')
+              Input.Statement(block, 'SUBSTACK')
+              property.length = 0
+              updateButton(Blockly, property)
+            },
+            mutationToDom() {
+              const elem = document.createElement('mutation')
+              if (isMutableBlock(block)) {
+                elem.setAttribute('length', String(block.length))
+              }
+              return elem
+            },
+            domToMutation(mutation: HTMLElement) {
+              const length = parseInt(
+                mutation.getAttribute('length') ?? '0',
+                10
+              )
+              if (isMutableBlock(block)) {
+                if (length > block.length) {
+                  for (let i = block.length; i < length; i++) {
+                    if (i > 0) {
+                      block.appendDummyInput(`COMMA_${i}`).appendField(',')
+                      block.moveInputBefore(`COMMA_${i}`, 'END')
+                    }
+                    Input.String(block, `ARG_${i}`, '')
+                    block.moveInputBefore(`ARG_${i}`, 'END')
+                  }
+                } else {
+                  for (let i = length; i < block.length; i++) {
+                    block.removeInput(`ARG_${i}`, true)
+                    block.removeInput(`COMMA_${i}`, true)
+                  }
+                  cleanInputs(block)
+                }
+                block.length = length
+                updateButton(Blockly, block)
+              }
+            }
+          }))
+        )
     )
     .register(
       new Category(() => `🔢 ${formatMessage('lpp.category.operator')}`)
         .register(
           'binaryOp',
-          Reporter.Square((instance, block) => {
+          Reporter.Square((Blockly, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.operator.binaryOp'))
             Input.String(block, 'lhs', '')
             block.appendDummyInput().appendField(
-              new instance.FieldDropdown([
+              new Blockly.FieldDropdown([
                 ['=', '='],
                 ['.', '.'],
                 ['+', '+'],
@@ -592,10 +610,10 @@ export function defineExtension(
         )
         .register(
           'unaryOp',
-          Reporter.Square((instance, block) => {
+          Reporter.Square((Blockly, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.operator.unaryOp'))
             block.appendDummyInput().appendField(
-              new instance.FieldDropdown([
+              new Blockly.FieldDropdown([
                 ['+', '+'],
                 ['-', '-'],
                 ['!', '!'],
@@ -610,94 +628,106 @@ export function defineExtension(
             Input.Any(block, 'value')
           })
         )
-        .register('new', {
-          init: Reporter.Square((instance, block) => {
-            block.setTooltip(formatMessage('lpp.tooltip.operator.new'))
-            const property = block as MutableBlock
-            Input.Text(block, 'LABEL', 'new')
-            Input.Any(block, 'fn')
-            Input.Text(block, 'BEGIN', '(')
-            /// Arguments
-            Input.Text(block, 'END', ')')
-            property.length = 0
-            updateButton(instance, property)
-          }),
-          mutationToDom(_, block) {
-            const elem = document.createElement('mutation')
-            if (isMutableBlock(block)) {
-              elem.setAttribute('length', String(block.length))
-            }
-            return elem
-          },
-          domToMutation(instance, block, mutation: HTMLElement) {
-            const length = parseInt(mutation.getAttribute('length') ?? '0', 10)
-            if (isMutableBlock(block)) {
-              if (length > block.length) {
-                for (let i = block.length; i < length; i++) {
-                  if (i > 0) {
-                    block.appendDummyInput(`COMMA_${i}`).appendField(',')
-                    block.moveInputBefore(`COMMA_${i}`, 'END')
-                  }
-                  Input.Any(block, `ARG_${i}`)
-                  block.moveInputBefore(`ARG_${i}`, 'END')
-                }
-              } else {
-                for (let i = length; i < block.length; i++) {
-                  block.removeInput(`ARG_${i}`, true)
-                  block.removeInput(`COMMA_${i}`, true)
-                }
-                cleanInputs(block)
+        .register(
+          'new',
+          Reporter.Square((Blockly, block) => ({
+            init() {
+              block.setTooltip(formatMessage('lpp.tooltip.operator.new'))
+              const property = block as MutableBlock
+              Input.Text(block, 'LABEL', 'new')
+              Input.Any(block, 'fn')
+              Input.Text(block, 'BEGIN', '(')
+              /// Arguments
+              Input.Text(block, 'END', ')')
+              property.length = 0
+              updateButton(Blockly, property)
+            },
+            mutationToDom() {
+              const elem = document.createElement('mutation')
+              if (isMutableBlock(block)) {
+                elem.setAttribute('length', String(block.length))
               }
-              block.length = length
-              updateButton(instance, block)
-            }
-          }
-        })
-        .register('call', {
-          init: Reporter.Square((instance, block) => {
-            block.setTooltip(formatMessage('lpp.tooltip.operator.call'))
-            const property = block as MutableBlock
-            Input.Any(block, 'fn')
-            Input.Text(block, 'BEGIN', '(')
-            /// Arguments
-            Input.Text(block, 'END', ')')
-            property.length = 0
-            updateButton(instance, property)
-          }),
-          mutationToDom(_, block) {
-            const elem = document.createElement('mutation')
-            if (isMutableBlock(block)) {
-              elem.setAttribute('length', String(block.length))
-            }
-            return elem
-          },
-          domToMutation(instance, block, mutation: HTMLElement) {
-            const length = parseInt(mutation.getAttribute('length') ?? '0', 10)
-            if (isMutableBlock(block)) {
-              if (length > block.length) {
-                for (let i = block.length; i < length; i++) {
-                  if (i > 0) {
-                    block.appendDummyInput(`COMMA_${i}`).appendField(',')
-                    block.moveInputBefore(`COMMA_${i}`, 'END')
+              return elem
+            },
+            domToMutation(mutation: HTMLElement) {
+              const length = parseInt(
+                mutation.getAttribute('length') ?? '0',
+                10
+              )
+              if (isMutableBlock(block)) {
+                if (length > block.length) {
+                  for (let i = block.length; i < length; i++) {
+                    if (i > 0) {
+                      block.appendDummyInput(`COMMA_${i}`).appendField(',')
+                      block.moveInputBefore(`COMMA_${i}`, 'END')
+                    }
+                    Input.Any(block, `ARG_${i}`)
+                    block.moveInputBefore(`ARG_${i}`, 'END')
                   }
-                  Input.Any(block, `ARG_${i}`)
-                  block.moveInputBefore(`ARG_${i}`, 'END')
+                } else {
+                  for (let i = length; i < block.length; i++) {
+                    block.removeInput(`ARG_${i}`, true)
+                    block.removeInput(`COMMA_${i}`, true)
+                  }
+                  cleanInputs(block)
                 }
-              } else {
-                for (let i = length; i < block.length; i++) {
-                  block.removeInput(`ARG_${i}`, true)
-                  block.removeInput(`COMMA_${i}`, true)
-                }
-                cleanInputs(block)
+                block.length = length
+                updateButton(Blockly, block)
               }
-              block.length = length
-              updateButton(instance, block)
             }
-          }
-        })
+          }))
+        )
+        .register(
+          'call',
+          Reporter.Square((Blockly, block) => ({
+            init() {
+              block.setTooltip(formatMessage('lpp.tooltip.operator.call'))
+              const property = block as MutableBlock
+              Input.Any(block, 'fn')
+              Input.Text(block, 'BEGIN', '(')
+              /// Arguments
+              Input.Text(block, 'END', ')')
+              property.length = 0
+              updateButton(Blockly, property)
+            },
+            mutationToDom() {
+              const elem = document.createElement('mutation')
+              if (isMutableBlock(block)) {
+                elem.setAttribute('length', String(block.length))
+              }
+              return elem
+            },
+            domToMutation(mutation: HTMLElement) {
+              const length = parseInt(
+                mutation.getAttribute('length') ?? '0',
+                10
+              )
+              if (isMutableBlock(block)) {
+                if (length > block.length) {
+                  for (let i = block.length; i < length; i++) {
+                    if (i > 0) {
+                      block.appendDummyInput(`COMMA_${i}`).appendField(',')
+                      block.moveInputBefore(`COMMA_${i}`, 'END')
+                    }
+                    Input.Any(block, `ARG_${i}`)
+                    block.moveInputBefore(`ARG_${i}`, 'END')
+                  }
+                } else {
+                  for (let i = length; i < block.length; i++) {
+                    block.removeInput(`ARG_${i}`, true)
+                    block.removeInput(`COMMA_${i}`, true)
+                  }
+                  cleanInputs(block)
+                }
+                block.length = length
+                updateButton(Blockly, block)
+              }
+            }
+          }))
+        )
         .register(
           'self',
-          Reporter.Square((_, block) => {
+          Reporter.Square((_, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.operator.self'))
             block.setCheckboxInFlyout(false)
             Input.Text(block, 'LABEL', formatMessage('lpp.block.operator.self'))
@@ -705,7 +735,7 @@ export function defineExtension(
         )
         .register(
           'var',
-          Reporter.Square((_, block) => {
+          Reporter.Square((_, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.operator.var'))
             Input.Text(block, 'LABEL', formatMessage('lpp.block.operator.var'))
             Input.String(block, 'name', '🐺')
@@ -716,31 +746,37 @@ export function defineExtension(
       new Category(() => `🤖 ${formatMessage('lpp.category.statement')}`)
         .register(
           'return',
-          Command((_, block) => {
-            block.setTooltip(formatMessage('lpp.tooltip.statement.return'))
-            Input.Text(
-              block,
-              'LABEL',
-              formatMessage('lpp.block.statement.return')
-            )
-            Input.Any(block, 'value')
-          }, true)
+          Command(
+            (_, block) => () => {
+              block.setTooltip(formatMessage('lpp.tooltip.statement.return'))
+              Input.Text(
+                block,
+                'LABEL',
+                formatMessage('lpp.block.statement.return')
+              )
+              Input.Any(block, 'value')
+            },
+            true
+          )
         )
         .register(
           'throw',
-          Command((_, block) => {
-            block.setTooltip(formatMessage('lpp.tooltip.statement.throw'))
-            Input.Text(
-              block,
-              'LABEL',
-              formatMessage('lpp.block.statement.throw')
-            )
-            Input.Any(block, 'value')
-          }, true)
+          Command(
+            (_, block) => () => {
+              block.setTooltip(formatMessage('lpp.tooltip.statement.throw'))
+              Input.Text(
+                block,
+                'LABEL',
+                formatMessage('lpp.block.statement.throw')
+              )
+              Input.Any(block, 'value')
+            },
+            true
+          )
         )
         .register(
           'scope',
-          Command((_, block) => {
+          Command((_, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.statement.scope'))
             Input.Text(
               block,
@@ -752,7 +788,7 @@ export function defineExtension(
         )
         .register(
           'try',
-          Command((_, block) => {
+          Command((_, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.statement.try'))
             Input.Text(block, 'TRY', formatMessage('lpp.block.statement.try.1'))
             Input.Statement(block, 'SUBSTACK')
@@ -767,7 +803,7 @@ export function defineExtension(
         )
         .register(
           'nop',
-          Command((_, block) => {
+          Command((_, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.statement.nop'))
             Input.Any(block, 'value')
           })

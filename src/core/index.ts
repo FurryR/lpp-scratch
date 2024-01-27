@@ -9,5 +9,6 @@ export {
   asBoolean,
   serializeObject,
   deserializeObject,
-  isPromise
+  isPromise,
+  withValue
 } from './helper'

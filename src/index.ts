@@ -42,7 +42,8 @@ import { LppTraceback } from './impl/context'
 import * as Serialization from './impl/serialization'
 import { Wrapper } from './impl/wrapper'
 import { attachType } from './impl/metadata'
-import { isPromise } from './core/helper'
+import { isPromise, withValue } from './core/helper'
+import { PromiseProxy } from './impl/promise'
 
 declare let Scratch: ScratchContext
 ;(function (Scratch: ScratchContext) {
@@ -244,10 +245,7 @@ declare let Scratch: ScratchContext
           return _visualReport.call(runtime, blockId, value)
         }
       }
-      // Experimental feature: monitor with inspector
-      console.log(
-        '🧪 You are currently using a experimental feature: monitor with inspector. This is very unstable and still under development at current.'
-      )
+      // TODO: Array support
       const _requestUpdateMonitor = runtime.requestUpdateMonitor
       if (_requestUpdateMonitor) {
         const patchMonitorValue = (element: HTMLElement, value: unknown) => {
@@ -387,12 +385,10 @@ declare let Scratch: ScratchContext
             fn.isTypehint
           ) {
             const res = Global.IllegalInvocationError.construct([])
-            if (isPromise(res))
-              throw new globalThis.Error(
-                'lpp: IllegalInvocationError constructor should be synchronous'
-              )
-            if (res instanceof LppException) return res
-            return new LppException(res.value)
+            return withValue(res, v => {
+              if (v instanceof LppException) return v
+              return new LppException(v.value)
+            })
           }
           return new LppReturn(
             LppExtension.serializeFunction(
@@ -408,12 +404,10 @@ declare let Scratch: ScratchContext
         LppFunction.native((self, args) => {
           if (self !== Global.Function) {
             const res = Global.IllegalInvocationError.construct([])
-            if (isPromise(res))
-              throw new globalThis.Error(
-                'lpp: IllegalInvocationError constructor should be synchronous'
-              )
-            if (res instanceof LppException) return res
-            return new LppException(res.value)
+            return withValue(res, v => {
+              if (v instanceof LppException) return v
+              return new LppException(v.value)
+            })
           }
           const val: unknown = deserializeObject(
             args[0] ?? new LppConstant(null)
@@ -436,9 +430,8 @@ declare let Scratch: ScratchContext
             const blocks = new Blocks(runtime, true)
             Serialization.deserializeBlock(blocks, val.script)
             const fn = new LppFunction((self, args) => {
-              const Target = runtime.getTargetForStage()?.constructor as
-                | TargetConstructor
-                | undefined
+              const Target = runtime.getTargetForStage()
+                ?.constructor as TargetConstructor
               if (!Target) throw new Error('lpp: project is disposed')
               let resolveFn: ((v: LppReturnOrException) => void) | undefined
               let syncResult: LppReturnOrException | undefined
@@ -500,12 +493,10 @@ declare let Scratch: ScratchContext
           const res = Global.SyntaxError.construct([
             new LppConstant('Invalid value')
           ])
-          if (isPromise(res))
-            throw new globalThis.Error(
-              'lpp: SyntaxError constructor should be synchronous'
-            )
-          if (res instanceof LppException) return res
-          return new LppException(res.value)
+          return withValue(res, v => {
+            if (v instanceof LppException) return v
+            return new LppException(v.value)
+          })
         })
       )
       attachType()
@@ -593,7 +584,7 @@ declare let Scratch: ScratchContext
     builtinType(
       args: { value: string },
       util: VM.BlockUtility
-    ): Wrapper<LppValue> | undefined {
+    ): Wrapper<LppValue> {
       this.util = util
       const instance = global.get(args.value)
       if (instance) {
@@ -610,7 +601,7 @@ declare let Scratch: ScratchContext
     builtinError(
       args: { value: string },
       util: VM.BlockUtility
-    ): Wrapper<LppValue> | undefined {
+    ): Wrapper<LppValue> {
       return this.builtinType(args, util)
     }
     /**
@@ -622,7 +613,7 @@ declare let Scratch: ScratchContext
     builtinUtility(
       args: { value: string },
       util: VM.BlockUtility
-    ): Wrapper<LppValue> | undefined {
+    ): Wrapper<LppValue> {
       return this.builtinType(args, util)
     }
     /**
@@ -634,7 +625,7 @@ declare let Scratch: ScratchContext
     constructLiteral(
       args: { value: unknown },
       util: VM.BlockUtility
-    ): Wrapper<LppConstant> | undefined {
+    ): Wrapper<LppConstant> {
       this.util = util
       const res = (() => {
         switch (args.value) {
@@ -662,7 +653,7 @@ declare let Scratch: ScratchContext
     binaryOp(
       args: { lhs: unknown; op: string | number; rhs: unknown },
       util: VM.BlockUtility
-    ): Wrapper<LppValue> | Wrapper<LppReference> | undefined {
+    ): Wrapper<LppValue> | Wrapper<LppReference> {
       this.util = util
       try {
         const lhs = Wrapper.unwrap(args.lhs)
@@ -740,10 +731,9 @@ declare let Scratch: ScratchContext
       args: { op: string; value: unknown },
       util: VM.BlockUtility
     ):
-      | PromiseLike<Wrapper<LppValue> | undefined>
+      | PromiseProxy<Wrapper<LppValue>>
       | Wrapper<LppValue>
-      | Wrapper<LppReference>
-      | undefined {
+      | Wrapper<LppReference> {
       /**
        * ['+', '+'],
          ['-', '-'],
@@ -831,51 +821,41 @@ declare let Scratch: ScratchContext
         unknown
       >,
       util: VM.BlockUtility
-    ): PromiseLike<void | Wrapper<LppValue>> | Wrapper<LppValue> | undefined {
-      try {
-        let { fn } = args
-        const { thread } = util
-        this.util = util
-        fn = Wrapper.unwrap(fn)
-        const actualArgs: LppValue[] = []
-        // runtime hack by @FurryR.
-        const block = this.getActiveBlockInstance(args, thread)
-        const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
-        for (let i = 0; i < len; i++) {
-          const value = Wrapper.unwrap(args[`ARG_${i}`])
-          if (value instanceof LppValue || value instanceof LppReference)
-            actualArgs[i] = ensureValue(value)
-          else throw new LppError('syntaxError')
-        }
-        if (!(fn instanceof LppValue || fn instanceof LppReference))
-          throw new LppError('syntaxError')
-        const func = ensureValue(fn)
-        if (func instanceof LppFunction) {
+    ): PromiseProxy<Wrapper<LppValue>> | Wrapper<LppValue> {
+      const { thread } = util
+      this.util = util
+      return this.asap(() => {
+        try {
+          let { fn } = args
+          fn = Wrapper.unwrap(fn)
+          const actualArgs: LppValue[] = []
+          // runtime hack by @FurryR.
+          const block = this.getActiveBlockInstance(args, thread)
+          const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
+          for (let i = 0; i < len; i++) {
+            const value = Wrapper.unwrap(args[`ARG_${i}`])
+            if (value instanceof LppValue || value instanceof LppReference)
+              actualArgs[i] = ensureValue(value)
+            else throw new LppError('syntaxError')
+          }
+          if (!(fn instanceof LppValue || fn instanceof LppReference))
+            throw new LppError('syntaxError')
+          const func = ensureValue(fn)
+          if (!(func instanceof LppFunction)) throw new LppError('notCallable')
           const res = func.apply(
             fn instanceof LppReference
               ? fn.parent.deref() ?? new LppConstant(null)
               : new LppConstant(null),
             actualArgs
           )
-          if (isPromise(res)) {
-            return res.then(result => {
-              const v = this.processApplyValue(result, thread)
-              if (v) {
-                return new Wrapper(v)
-              }
-              return
-            })
-          } else {
-            const v = this.processApplyValue(res, thread)
-            if (v) {
-              return new Wrapper(v)
-            }
-          }
+          return withValue(
+            res,
+            result => new Wrapper(this.processApplyValue(result, thread))
+          )
+        } catch (e) {
+          this.handleError(e)
         }
-        return undefined
-      } catch (e) {
-        this.handleError(e)
-      }
+      }, thread)
     }
     /**
      * Generate a new object by function with arguments.
@@ -889,46 +869,37 @@ declare let Scratch: ScratchContext
         unknown
       >,
       util: VM.BlockUtility
-    ): PromiseLike<void | Wrapper<LppValue>> | Wrapper<LppValue> | undefined {
-      try {
-        let { fn } = args
-        const { thread } = util
-        this.util = util
-        fn = Wrapper.unwrap(fn)
-        // runtime hack by @FurryR.
-        const actualArgs: LppValue[] = []
-        // runtime hack by @FurryR.
-        const block = this.getActiveBlockInstance(args, thread)
-        const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
-        for (let i = 0; i < len; i++) {
-          const value = Wrapper.unwrap(args[`ARG_${i}`])
-          if (value instanceof LppValue || value instanceof LppReference)
-            actualArgs[i] = ensureValue(value)
-          else throw new LppError('syntaxError')
-        }
-        if (!(fn instanceof LppValue || fn instanceof LppReference))
-          throw new LppError('syntaxError')
-        fn = ensureValue(fn)
-        if (!(fn instanceof LppFunction)) throw new LppError('notCallable')
-        const res = fn.construct(actualArgs)
-        if (isPromise(res)) {
-          return res.then(result => {
-            const v = this.processApplyValue(result, thread)
-            if (v) {
-              return new Wrapper(v)
-            }
-            return
-          })
-        } else {
-          const v = this.processApplyValue(res, thread)
-          if (v) {
-            return new Wrapper(v)
+    ): PromiseProxy<Wrapper<LppValue>> | Wrapper<LppValue> {
+      const { thread } = util
+      this.util = util
+      return this.asap(() => {
+        try {
+          let { fn } = args
+          fn = Wrapper.unwrap(fn)
+          // runtime hack by @FurryR.
+          const actualArgs: LppValue[] = []
+          // runtime hack by @FurryR.
+          const block = this.getActiveBlockInstance(args, thread)
+          const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
+          for (let i = 0; i < len; i++) {
+            const value = Wrapper.unwrap(args[`ARG_${i}`])
+            if (value instanceof LppValue || value instanceof LppReference)
+              actualArgs[i] = ensureValue(value)
+            else throw new LppError('syntaxError')
           }
+          if (!(fn instanceof LppValue || fn instanceof LppReference))
+            throw new LppError('syntaxError')
+          fn = ensureValue(fn)
+          if (!(fn instanceof LppFunction)) throw new LppError('notCallable')
+          const res = fn.construct(actualArgs)
+          return withValue(
+            res,
+            result => new Wrapper(this.processApplyValue(result, thread))
+          )
+        } catch (e) {
+          this.handleError(e)
         }
-        return undefined
-      } catch (e) {
-        this.handleError(e)
-      }
+      }, thread)
     }
     /**
      * Return self object.
@@ -936,7 +907,7 @@ declare let Scratch: ScratchContext
      * @param util Scratch util.
      * @returns Result.
      */
-    self(_: object, util: VM.BlockUtility): Wrapper<LppValue> | undefined {
+    self(_: object, util: VM.BlockUtility): Wrapper<LppValue> {
       try {
         const { thread } = util
         this.util = util
@@ -991,7 +962,7 @@ declare let Scratch: ScratchContext
     constructArray(
       args: Record<string, unknown>,
       util: VM.BlockUtility
-    ): Wrapper<LppArray> | undefined {
+    ): Wrapper<LppArray> {
       try {
         const { thread } = util
         this.util = util
@@ -1018,7 +989,7 @@ declare let Scratch: ScratchContext
     constructObject(
       args: Record<string, unknown>,
       util: VM.BlockUtility
-    ): Wrapper<LppObject> | undefined {
+    ): Wrapper<LppObject> {
       try {
         const { thread } = util
         this.util = util
@@ -1056,7 +1027,7 @@ declare let Scratch: ScratchContext
     constructFunction(
       args: Record<string, unknown>,
       util: VM.BlockUtility
-    ): Wrapper<LppFunction> | undefined {
+    ): Wrapper<LppFunction> {
       try {
         const { thread, target } = util
         this.util = util
@@ -1073,7 +1044,7 @@ declare let Scratch: ScratchContext
             signature[i] = String(args[`ARG_${i}`])
           else throw new LppError('syntaxError')
         }
-        let context: LppContext | undefined
+        let context: LppContext
         const blocks = thread.target.blocks
         const targetId = target.id
         const lppThread = thread as Thread
@@ -1081,7 +1052,7 @@ declare let Scratch: ScratchContext
           context = lppThread.lpp
         }
         const fn = new LppFunction((self, args) => {
-          let resolveFn: ((v: LppReturnOrException) => void) | undefined
+          let resolveFn: (v: LppReturnOrException) => void
           let syncResult: LppReturnOrException | undefined
           const target =
             this.vm.runtime.getTargetById(targetId) ??
@@ -1146,10 +1117,7 @@ declare let Scratch: ScratchContext
      * @param util Scratch util.
      * @returns The value of the variable. If it is not exist, returns null instead.
      */
-    var(
-      args: { name: string },
-      util: VM.BlockUtility
-    ): Wrapper<LppReference> | undefined {
+    var(args: { name: string }, util: VM.BlockUtility): Wrapper<LppReference> {
       try {
         const { thread } = util
         this.util = util
@@ -1229,47 +1197,49 @@ declare let Scratch: ScratchContext
     scope(
       args: Record<string, unknown>,
       util: VM.BlockUtility
-    ): PromiseLike<void> | undefined {
-      try {
-        const { thread, target } = util
-        this.util = util
-        // runtime hack by @FurryR.
-        const block = this.getActiveBlockInstance(args, thread)
-        const id = block.inputs.SUBSTACK?.block
-        if (!id) return
-        const parentThread = thread as Thread
-        const scopeThread = this.vm.runtime._pushThread(id, target) as Thread
-        let resolveFn: (() => void) | undefined
-        let resolved = false
-        scopeThread.lpp = new LppContext(
-          parentThread.lpp ?? undefined,
-          value => {
-            if (parentThread.lpp) {
-              parentThread.lpp.returnCallback(value)
-              return scopeThread.stopThisScript()
-            } else throw new LppError('useOutsideFunction')
-          },
-          value => {
-            if (parentThread.lpp) {
-              // interrupt the thread.
-              parentThread.lpp.exceptionCallback(value)
-              return thread.stopThisScript()
+    ): PromiseProxy<undefined> | undefined {
+      const { thread, target } = util
+      this.util = util
+      return this.asap(() => {
+        try {
+          // runtime hack by @FurryR.
+          const block = this.getActiveBlockInstance(args, thread)
+          const id = block.inputs.SUBSTACK?.block
+          if (!id) return
+          const parentThread = thread as Thread
+          const scopeThread = this.vm.runtime._pushThread(id, target) as Thread
+          let resolveFn: (_: undefined) => void
+          let resolved = false
+          scopeThread.lpp = new LppContext(
+            parentThread.lpp ?? undefined,
+            value => {
+              if (parentThread.lpp) {
+                parentThread.lpp.returnCallback(value)
+                return scopeThread.stopThisScript()
+              } else throw new LppError('useOutsideFunction')
+            },
+            value => {
+              if (parentThread.lpp) {
+                // interrupt the thread.
+                parentThread.lpp.exceptionCallback(value)
+                return thread.stopThisScript()
+              }
+              this.handleException(value)
             }
-            this.handleException(value)
-          }
-        )
-        this.bindThread(scopeThread, () => {
-          if (resolveFn) resolveFn()
-          else resolved = true
-        })
-        this.stepThread(scopeThread)
-        if (resolved) return
-        return new Promise<void>(resolve => {
-          resolveFn = resolve
-        })
-      } catch (e) {
-        this.handleError(e)
-      }
+          )
+          this.bindThread(scopeThread, () => {
+            if (resolveFn) resolveFn(undefined)
+            else resolved = true
+          })
+          this.stepThread(scopeThread)
+          if (resolved) return
+          return new Promise<undefined>(resolve => {
+            resolveFn = resolve
+          })
+        } catch (e) {
+          this.handleError(e)
+        }
+      }, thread)
     }
     /**
      * Catch exceptions.
@@ -1280,90 +1250,92 @@ declare let Scratch: ScratchContext
     try(
       args: Record<string, unknown>,
       util: VM.BlockUtility
-    ): PromiseLike<void> | undefined {
-      try {
-        const { thread, target } = util
-        this.util = util
-        // runtime hack by @FurryR.
-        const block = this.getActiveBlockInstance(args, thread)
-        const dest = Wrapper.unwrap(args.var)
-        if (!(dest instanceof LppReference)) throw new LppError('syntaxError')
-        const id = block.inputs.SUBSTACK?.block
-        if (!id) return
-        const captureId = block.inputs.SUBSTACK_2?.block
-        const parentThread = thread as Thread
-        const tryThread = this.vm.runtime._pushThread(id, target) as Thread
-        let triggered = false
-        let resolveFn: (() => void) | undefined
-        let resolved = false
-        tryThread.lpp = new LppContext(
-          parentThread.lpp ?? undefined,
-          value => {
-            if (parentThread.lpp) {
-              parentThread.lpp.returnCallback(value)
-              return tryThread.stopThisScript()
-            } else throw new LppError('useOutsideFunction')
-          },
-          value => {
-            triggered = true
-            if (!captureId) {
-              if (resolveFn) resolveFn()
-              else resolved = true
-              return
-            }
-            const GlobalError = global.get('Error')
-            if (!(GlobalError instanceof LppFunction))
-              throw new Error('lpp: not implemented')
-            const error = value.value
-            if (error.instanceof(GlobalError)) {
-              const traceback = new LppArray(
-                value.stack.map(v => new LppConstant(v.toString()))
-              )
-              error.set('stack', traceback)
-            }
-            dest.assign(error)
-            const catchThread = this.vm.runtime._pushThread(
-              captureId,
-              target
-            ) as Thread
-            catchThread.lpp = new LppContext(
-              parentThread.lpp ?? undefined,
-              value => {
-                if (parentThread.lpp) {
-                  parentThread.lpp.returnCallback(value)
-                  return thread.stopThisScript()
-                } else throw new LppError('useOutsideFunction')
-              },
-              value => {
-                if (parentThread.lpp) {
-                  // interrupt the thread.
-                  parentThread.lpp.exceptionCallback(value)
-                  return thread.stopThisScript()
-                }
-                this.handleException(value)
+    ): PromiseProxy<undefined> | undefined {
+      const { thread, target } = util
+      this.util = util
+      return this.asap(() => {
+        try {
+          // runtime hack by @FurryR.
+          const block = this.getActiveBlockInstance(args, thread)
+          const dest = Wrapper.unwrap(args.var)
+          if (!(dest instanceof LppReference)) throw new LppError('syntaxError')
+          const id = block.inputs.SUBSTACK?.block
+          if (!id) return
+          const captureId = block.inputs.SUBSTACK_2?.block
+          const parentThread = thread as Thread
+          const tryThread = this.vm.runtime._pushThread(id, target) as Thread
+          let triggered = false
+          let resolveFn: ((_: undefined) => void) | undefined
+          let resolved = false
+          tryThread.lpp = new LppContext(
+            parentThread.lpp ?? undefined,
+            value => {
+              if (parentThread.lpp) {
+                parentThread.lpp.returnCallback(value)
+                return tryThread.stopThisScript()
+              } else throw new LppError('useOutsideFunction')
+            },
+            value => {
+              triggered = true
+              if (!captureId) {
+                if (resolveFn) resolveFn(undefined)
+                else resolved = true
+                return
               }
-            )
-            this.bindThread(catchThread, () => {
-              if (resolveFn) resolveFn()
+              const GlobalError = global.get('Error')
+              if (!(GlobalError instanceof LppFunction))
+                throw new Error('lpp: not implemented')
+              const error = value.value
+              if (error.instanceof(GlobalError)) {
+                const traceback = new LppArray(
+                  value.stack.map(v => new LppConstant(v.toString()))
+                )
+                error.set('stack', traceback)
+              }
+              dest.assign(error)
+              const catchThread = this.vm.runtime._pushThread(
+                captureId,
+                target
+              ) as Thread
+              catchThread.lpp = new LppContext(
+                parentThread.lpp ?? undefined,
+                value => {
+                  if (parentThread.lpp) {
+                    parentThread.lpp.returnCallback(value)
+                    return thread.stopThisScript()
+                  } else throw new LppError('useOutsideFunction')
+                },
+                value => {
+                  if (parentThread.lpp) {
+                    // interrupt the thread.
+                    parentThread.lpp.exceptionCallback(value)
+                    return thread.stopThisScript()
+                  }
+                  this.handleException(value)
+                }
+              )
+              this.bindThread(catchThread, () => {
+                if (resolveFn) resolveFn(undefined)
+                else resolved = true
+              })
+              this.stepThread(catchThread)
+            }
+          )
+          this.bindThread(tryThread, () => {
+            if (!triggered) {
+              if (resolveFn) resolveFn(undefined)
               else resolved = true
-            })
-            this.stepThread(catchThread)
-          }
-        )
-        this.bindThread(tryThread, () => {
-          if (!triggered) {
-            if (resolveFn) resolveFn()
-            else resolved = true
-          }
-        })
-        this.stepThread(tryThread)
-        if (resolved) return
-        return new Promise(resolve => {
-          resolveFn = resolve
-        })
-      } catch (e) {
-        this.handleError(e)
-      }
+            }
+          })
+          this.stepThread(tryThread)
+          if (resolved) return
+          return new Promise<undefined>(resolve => {
+            resolveFn = resolve
+          })
+        } catch (e) {
+          this.handleError(e)
+        }
+      }, thread)
     }
     /**
      * Drops the value of specified expression.
@@ -1452,7 +1424,7 @@ declare let Scratch: ScratchContext
     private processApplyValue(
       result: LppReturnOrException,
       thread: Thread
-    ): LppValue | undefined {
+    ): LppValue {
       if (result instanceof LppReturn) {
         return result.value
       } else {
@@ -1466,7 +1438,7 @@ declare let Scratch: ScratchContext
         if (thread.lpp) {
           // interrupt the thread.
           thread.lpp.exceptionCallback(result)
-          return void thread.stopThisScript()
+          return void thread.stopThisScript() as never
         }
         this.handleException(result)
       }
@@ -1555,6 +1527,24 @@ declare let Scratch: ScratchContext
         this.vm.runtime.sequencer.stepThread(callerThread) // restore compiler context (globalState)
         callerThread.generator = orig
       }
+    }
+    /**
+     * Process result as soon as possible.
+     * @param fn Function that returns result.
+     * @param thread Caller thread.
+     * @returns Processed promise or value.
+     */
+    private asap<T>(
+      fn: () => T | PromiseLike<T>,
+      thread: Thread
+    ): T | PromiseProxy<T> {
+      const res = fn()
+      const postProcess = () => {
+        this.stepThread(thread)
+      }
+      return isPromise(res)
+        ? new PromiseProxy(res, postProcess, postProcess)
+        : res
     }
     /**
      * Serialize function.

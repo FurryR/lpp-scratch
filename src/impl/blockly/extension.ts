@@ -24,15 +24,26 @@ export type BlockMetadata<T extends keyof MetadataMap = keyof MetadataMap> = {
   blockType: T
 } & MetadataMap[T]
 /**
+ * Generator function result for Blockly block.
+ */
+export interface BlockMap {
+  [key: string]: (...args: never[]) => unknown
+}
+/**
  * Metadata for Blockly block.
  */
 export interface BlockDescriptor {
-  [key: string]: (
-    this: BlockDescriptor,
+  /**
+   * Register blockly functions.
+   * @param Blockly Blockly instance.
+   * @param block Block instance.
+   * @warning Please don't use block instance directly in init() function; use it in returned functions.
+   */
+  init(
     Blockly: BlocklyInstance,
-    block: Block,
-    ...args: never[]
-  ) => unknown
+    block: Block
+  ): BlockMap | ((...args: never[]) => unknown)
+  type: 'command' | 'reporter'
 }
 /**
  * Insertable block.
@@ -76,17 +87,30 @@ export class Category {
    * @param extension Parent extension.
    */
   inject(Blockly: BlocklyInstance, extension: Extension) {
+    const prepatch = (block: Block) => {
+      block.setCategory(extension.id)
+      block.setInputsInline(true)
+      block.setColour(extension.color)
+    }
     for (const [key, value] of this.block.entries()) {
+      const map = value.init(Blockly, null as never)
       const res: Record<string, unknown> = {}
-      for (const [key, originalFn] of Object.entries(value)) {
-        res[key] = function (this: Block, ...args: never[]) {
-          if (key === 'init') {
-            // Prepatch (color, icon, etc.)
-            this.setCategory(extension.id)
-            this.setInputsInline(true)
-            this.setColour(extension.color)
+      if (typeof map === 'function') {
+        res.init = function (this: Block, ...args: never[]) {
+          prepatch(this)
+          const fn = value.init(Blockly, this) as (...args: never[]) => unknown
+          return fn(...args)
+        }
+      } else {
+        for (const key of Object.keys(map)) {
+          res[key] = function (this: Block, ...args: never[]) {
+            if (key === 'init') {
+              // Prepatch (color, icon, etc.)
+              prepatch(this)
+            }
+            const map = value.init(Blockly, this) as BlockMap
+            return map[key].apply(window, args)
           }
-          return originalFn.call(value, Blockly, this, ...args)
         }
       }
       Reflect.defineProperty(Blockly.Blocks, `${extension.id}_${key}`, {
@@ -104,11 +128,8 @@ export class Category {
    * @param block Block descriptor.
    * @returns This for chaining.
    */
-  register(
-    name: string,
-    block: BlockDescriptor | BlockDescriptor[string]
-  ): this {
-    this.block.set(name, block instanceof Function ? { init: block } : block)
+  register(name: string, block: BlockDescriptor): this {
+    this.block.set(name, block)
     return this
   }
   /**
@@ -122,8 +143,8 @@ export class Category {
         text: this.lazyLabel()
       }
     ].concat(
-      Array.from(this.block.keys()).map(opcode => ({
-        blockType: 'reporter',
+      Array.from(this.block.entries()).map(([opcode, value]) => ({
+        blockType: value.type,
         opcode,
         text: '',
         arguments: {}
