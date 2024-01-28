@@ -1,9 +1,4 @@
-import {
-  LppTraceback,
-  LppReturnOrException,
-  LppReturn,
-  LppException
-} from './context'
+import { LppTraceback, LppResult, LppReturn, LppException } from './context'
 
 import { global } from './global'
 import {
@@ -904,7 +899,7 @@ export class LppFunction extends LppObject {
     execute: (
       self: LppValue,
       args: LppValue[]
-    ) => LppReturnOrException | PromiseLike<LppReturnOrException>,
+    ) => LppResult | PromiseLike<LppResult>,
     prototype?: LppObject
   ): LppFunction {
     /**
@@ -916,11 +911,11 @@ export class LppFunction extends LppObject {
      * @returns Result.
      */
     function addNativeTraceback(
-      exception: LppReturnOrException,
+      exception: LppResult,
       fn: LppFunction,
       self: LppValue,
       args: LppValue[]
-    ): LppReturnOrException {
+    ): LppResult {
       if (exception instanceof LppException)
         exception.pushStack(new LppTraceback.NativeFn(fn, self, args))
       return exception
@@ -1009,10 +1004,7 @@ export class LppFunction extends LppObject {
    * @param args Function arguments.
    * @returns Return value.
    */
-  apply(
-    self: LppValue,
-    args: LppValue[]
-  ): LppReturnOrException | PromiseLike<LppReturnOrException> {
+  apply(self: LppValue, args: LppValue[]): LppResult | PromiseLike<LppResult> {
     return this.execute(self, args)
   }
   /**
@@ -1020,9 +1012,7 @@ export class LppFunction extends LppObject {
    * @param args Function arguments.
    * @returns Return value.
    */
-  construct(
-    args: LppValue[]
-  ): LppReturnOrException | PromiseLike<LppReturnOrException> {
+  construct(args: LppValue[]): LppResult | PromiseLike<LppResult> {
     if (
       this === global.get('Number') ||
       this === global.get('String') ||
@@ -1042,7 +1032,7 @@ export class LppFunction extends LppObject {
      * @param result Result.
      * @returns Processed result.
      */
-    const process = (result: LppReturnOrException): LppReturnOrException => {
+    const process = (result: LppResult): LppResult => {
       if (result instanceof LppException) return result
       return new LppReturn(obj)
     }
@@ -1064,7 +1054,7 @@ export class LppFunction extends LppObject {
     private execute: (
       self: LppValue,
       args: LppValue[]
-    ) => LppReturnOrException | PromiseLike<LppReturnOrException>,
+    ) => LppResult | PromiseLike<LppResult>,
     prototype: LppObject = new LppObject()
   ) {
     super(new Map(), undefined)
@@ -1087,7 +1077,7 @@ export class LppPromise extends LppObject {
                 const res = resolveFn.apply(this, [value])
                 return withValue(res, v =>
                   processThenReturn(v, resolve, reject)
-                ) as PromiseLike<void>
+                )
               }
               throw new Error('lpp: unknown result')
             }
@@ -1098,7 +1088,7 @@ export class LppPromise extends LppObject {
                 const res = rejectFn.apply(this, [err])
                 return withValue(res, v =>
                   processThenReturn(v, resolve, reject)
-                ) as PromiseLike<void>
+                )
               }
               throw err
             }
@@ -1117,9 +1107,7 @@ export class LppPromise extends LppObject {
       this.pm.catch(err => {
         if (err instanceof LppValue) {
           const res = rejectFn.apply(this, [err])
-          return withValue(res, v =>
-            processThenReturn(v, resolve, reject)
-          ) as PromiseLike<void>
+          return withValue(res, v => processThenReturn(v, resolve, reject))
         }
         throw err
       })

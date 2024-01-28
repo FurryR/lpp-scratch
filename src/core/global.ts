@@ -7,15 +7,15 @@ import {
   LppPromise,
   LppValue
 } from './type'
-
 import {
   asBoolean,
-  serializeObject,
   ensureValue,
-  deserializeObject,
   processThenReturn,
-  withValue
+  withValue,
+  raise
 } from './helper'
+import * as ffi from './ffi'
+
 function processPromise(self: LppPromise, res: LppPromise): LppReturn {
   self.pm = res.pm
   return new LppReturn(new LppConstant(null))
@@ -88,11 +88,7 @@ export namespace Global {
             if (self instanceof LppConstant && typeof self.value === 'string') {
               return new LppReturn(new LppConstant(self.value.length))
             }
-            const res = IllegalInvocationError.construct([])
-            return withValue(res, v => {
-              if (v instanceof LppException) return v
-              return new LppException(v.value)
-            })
+            return raise(IllegalInvocationError.construct([]))
           })
         ]
       ])
@@ -125,11 +121,7 @@ export namespace Global {
             if (self instanceof LppArray) {
               return new LppReturn(new LppConstant(self.value.length))
             }
-            const res = IllegalInvocationError.construct([])
-            return withValue(res, v => {
-              if (v instanceof LppException) return v
-              return new LppException(v.value)
-            })
+            return raise(IllegalInvocationError.construct([]))
           })
         ]
       ])
@@ -162,11 +154,7 @@ export namespace Global {
           })
         )
       if (args[0] instanceof LppFunction) return new LppReturn(args[0])
-      const res = IllegalInvocationError.construct([])
-      return withValue(res, v => {
-        if (v instanceof LppException) return v
-        return new LppException(v.value)
-      })
+      return raise(IllegalInvocationError.construct([]))
     },
     new LppObject(
       new Map([
@@ -187,11 +175,7 @@ export namespace Global {
                 }
                 default: {
                   if (!(args[1] instanceof LppArray)) {
-                    const res = IllegalInvocationError.construct([])
-                    return withValue(res, v => {
-                      if (v instanceof LppException) return v
-                      return new LppException(v.value)
-                    })
+                    return raise(IllegalInvocationError.construct([]))
                   }
                   selfArg = args[0]
                   argArray = args[1].value.map(v => v ?? new LppConstant(null))
@@ -200,11 +184,7 @@ export namespace Global {
               }
               return self.apply(selfArg, argArray)
             } else {
-              const res = IllegalInvocationError.construct([])
-              return withValue(res, v => {
-                if (v instanceof LppException) return v
-                return new LppException(v.value)
-              })
+              return raise(IllegalInvocationError.construct([]))
             }
           })
         ]
@@ -243,11 +223,7 @@ export namespace Global {
         })
         return withValue(temp, res => processPromise(self, res))
       } else {
-        const res = IllegalInvocationError.construct([])
-        return withValue(res, v => {
-          if (v instanceof LppException) return v
-          return new LppException(v.value)
-        })
+        return raise(IllegalInvocationError.construct([]))
       }
     },
     new LppObject(
@@ -263,11 +239,7 @@ export namespace Global {
                 )
               )
             } else {
-              const res = IllegalInvocationError.construct([])
-              return withValue(res, v => {
-                if (v instanceof LppException) return v
-                return new LppException(v.value)
-              })
+              return raise(IllegalInvocationError.construct([]))
             }
           })
         ],
@@ -296,11 +268,7 @@ export namespace Global {
     'resolve',
     LppFunction.native((self, args) => {
       if (self !== Promise) {
-        const res = IllegalInvocationError.construct([])
-        return withValue(res, v => {
-          if (v instanceof LppException) return v
-          return new LppException(v.value)
-        })
+        return raise(IllegalInvocationError.construct([]))
       }
       const res = LppPromise.generate((resolve, reject) => {
         const res = processThenReturn(
@@ -317,11 +285,7 @@ export namespace Global {
     'reject',
     LppFunction.native((self, args) => {
       if (self !== Promise) {
-        const res = IllegalInvocationError.construct([])
-        return withValue(res, v => {
-          if (v instanceof LppException) return v
-          return new LppException(v.value)
-        })
+        return raise(IllegalInvocationError.construct([]))
       }
       return new LppReturn(
         new LppPromise(
@@ -339,11 +303,7 @@ export namespace Global {
       self.set('stack', new LppConstant(null))
       return new LppReturn(new LppArray())
     } else {
-      const res = IllegalInvocationError.construct([])
-      return withValue(res, v => {
-        if (v instanceof LppException) return v
-        return new LppException(v.value)
-      })
+      return raise(IllegalInvocationError.construct([]))
     }
   }, new LppObject(new Map()))
   /**
@@ -358,11 +318,7 @@ export namespace Global {
           return new LppReturn(new LppConstant(null))
         })
       } else {
-        const res = IllegalInvocationError.construct([])
-        return withValue(res, v => {
-          if (v instanceof LppException) return v
-          return new LppException(v.value)
-        })
+        return raise(IllegalInvocationError.construct([]))
       }
     },
     new LppObject(new Map([['prototype', ensureValue(Error.get('prototype'))]]))
@@ -379,11 +335,7 @@ export namespace Global {
           return new LppReturn(new LppConstant(null))
         })
       } else {
-        const res = IllegalInvocationError.construct([])
-        return withValue(res, v => {
-          if (v instanceof LppException) return v
-          return new LppException(v.value)
-        })
+        return raise(IllegalInvocationError.construct([]))
       }
     },
     new LppObject(new Map([['prototype', ensureValue(Error.get('prototype'))]]))
@@ -394,35 +346,26 @@ export namespace Global {
         'parse',
         LppFunction.native((self, args) => {
           if (self !== JSON) {
-            const res = IllegalInvocationError.construct([])
-            return withValue(res, v => {
-              if (v instanceof LppException) return v
-              return new LppException(v.value)
-            })
+            return raise(IllegalInvocationError.construct([]))
           }
           if (
             args.length < 1 ||
             !(args[0] instanceof LppConstant) ||
             !(typeof args[0].value === 'string')
           ) {
-            const res = SyntaxError.construct([new LppConstant('Invalid JSON')])
-            return withValue(res, v => {
-              if (v instanceof LppException) return v
-              return new LppException(v.value)
-            })
+            return raise(
+              SyntaxError.construct([new LppConstant('Invalid JSON')])
+            )
           }
           try {
             return new LppReturn(
-              serializeObject(globalThis.JSON.parse(args[0].value))
+              ffi.fromObject(globalThis.JSON.parse(args[0].value))
             )
           } catch (e) {
             if (e instanceof globalThis.Error) {
-              const res = SyntaxError.construct([new LppConstant(e.message)])
-              return withValue(res, v => {
-                if (v instanceof LppException) return v
-                return new LppException(v.value)
-              })
-            } else throw e
+              return raise(SyntaxError.construct([new LppConstant(e.message)]))
+            }
+            throw e
           }
         })
       ],
@@ -430,35 +373,22 @@ export namespace Global {
         'stringify',
         LppFunction.native((self, args) => {
           if (self !== JSON) {
-            const res = IllegalInvocationError.construct([])
-            return withValue(res, v => {
-              if (v instanceof LppException) return v
-              return new LppException(v.value)
-            })
+            return raise(IllegalInvocationError.construct([]))
           }
           if (args.length < 1) {
-            const res = SyntaxError.construct([
-              new LppConstant('Invalid value')
-            ])
-            return withValue(res, v => {
-              if (v instanceof LppException) return v
-              return new LppException(v.value)
-            })
+            return raise(
+              SyntaxError.construct([new LppConstant('Invalid value')])
+            )
           }
           try {
             return new LppReturn(
-              new LppConstant(
-                globalThis.JSON.stringify(deserializeObject(args[0]))
-              )
+              new LppConstant(globalThis.JSON.stringify(ffi.toObject(args[0])))
             )
           } catch (e) {
             if (e instanceof globalThis.Error) {
-              const res = SyntaxError.construct([new LppConstant(e.message)])
-              return withValue(res, v => {
-                if (v instanceof LppException) return v
-                return new LppException(v.value)
-              })
-            } else throw e
+              return raise(SyntaxError.construct([new LppConstant(e.message)]))
+            }
+            throw e
           }
         })
       ]

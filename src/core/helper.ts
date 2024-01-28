@@ -1,4 +1,4 @@
-import { LppException, LppReturn, LppReturnOrException } from './context'
+import { LppException, LppReturn, LppResult } from './context'
 import {
   LppValue,
   LppReference,
@@ -178,81 +178,6 @@ export function compare(lhs: LppValue, op: string, rhs: LppValue): boolean {
   if (!fn) throw new Error('lpp: not implemented')
   return compareInternal(fn, lhs, rhs)
 }
-/**
- * Convert Lpp object to JavaScript object.
- * @param value Object.
- * @returns Return value.
- */
-export function deserializeObject(value: LppValue): unknown {
-  const map = new WeakMap<LppValue, object>()
-  /**
-   * Convert Lpp object to JavaScript object.
-   * @param value Object.
-   * @returns Return value.
-   */
-  function deserializeInternal(value: LppValue): unknown {
-    if (value instanceof LppConstant) return value.value
-    if (value instanceof LppArray) {
-      const cache = map.get(value)
-      if (cache) return cache
-      const res = value.value.map(v => (v ? deserializeObject(v) : null))
-      map.set(value, res)
-      return res
-    }
-    if (value instanceof LppObject) {
-      const cache = map.get(value)
-      if (cache) return cache
-      const res: Record<string, unknown> = {}
-      for (const [k, v] of value.value.entries()) {
-        if (k === 'constructor') continue
-        res[k] = deserializeObject(v)
-      }
-      map.set(value, res)
-      return res
-    }
-    return null
-  }
-  return deserializeInternal(value)
-}
-/**
- * Convert JavaScript object to Lpp object.
- * @param value Object.
- * @returns Return value.
- */
-export function serializeObject(value: unknown): LppValue {
-  const map = new WeakMap<object, LppValue>()
-  /**
-   * Convert JavaScript object to Lpp object.
-   * @param value Object.
-   * @returns Return value.
-   */
-  function serializeInternal(value: unknown): LppValue {
-    if (value === null || value === undefined) return new LppConstant(null)
-    switch (typeof value) {
-      case 'string':
-      case 'number':
-      case 'boolean':
-        return new LppConstant(value)
-      case 'object': {
-        const v = map.get(value)
-        if (v) return v
-        if (value instanceof globalThis.Array) {
-          const res = new LppArray(value.map(value => serializeInternal(value)))
-          map.set(value, res)
-          return res
-        }
-        const obj = new LppObject()
-        for (const [k, v] of globalThis.Object.entries(value)) {
-          obj.set(k, serializeInternal(v))
-        }
-        map.set(value, obj)
-        return obj
-      }
-    }
-    return new LppConstant(null)
-  }
-  return serializeInternal(value)
-}
 export function isPromise(value: unknown): value is PromiseLike<unknown> {
   return (
     typeof value === 'object' &&
@@ -262,7 +187,7 @@ export function isPromise(value: unknown): value is PromiseLike<unknown> {
   )
 }
 export function processThenReturn(
-  returnValue: LppReturnOrException,
+  returnValue: LppResult,
   resolve: (v: LppValue) => void,
   reject: (reason: unknown) => void
 ): undefined | PromiseLike<void> {
@@ -302,9 +227,16 @@ export function processThenReturn(
 export function withValue<T, T2>(
   v: T | PromiseLike<T>,
   fn: (value: T) => T2
-): T2 | PromiseLike<T2> {
+): T2 | PromiseLike<Awaited<T2>> {
   if (isPromise(v)) {
-    return v.then(v => fn(v))
+    return v.then(v => fn(v)) as PromiseLike<Awaited<T2>>
   }
   return fn(v)
+}
+export function raise(
+  v: LppResult | PromiseLike<LppResult>
+): LppException | PromiseLike<LppException> {
+  return withValue(v, value =>
+    value instanceof LppException ? value : new LppException(value.value)
+  )
 }

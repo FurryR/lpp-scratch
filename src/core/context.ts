@@ -212,4 +212,4 @@ export class LppFunctionContext extends LppContext {
 /**
  * Result or Exception.
  */
-export type LppReturnOrException = LppReturn | LppException
+export type LppResult = LppReturn | LppException

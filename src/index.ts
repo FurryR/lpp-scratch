@@ -10,8 +10,7 @@ import {
   Thread,
   VM,
   ScratchContext,
-  TargetConstructor,
-  ThreadConstructor
+  TargetConstructor
 } from './impl/typing'
 import type * as ScratchBlocks from 'blockly/core'
 import {
@@ -24,16 +23,15 @@ import {
   LppArray,
   LppObject,
   LppFunction,
-  LppPromise,
   LppReturn,
   LppException,
   LppFunctionContext,
   LppContext,
-  LppReturnOrException,
+  LppResult,
   Global,
-  serializeObject,
-  deserializeObject
+  ffi
 } from './core'
+import * as core from './core'
 import locale from './impl/l10n'
 import { Dialog, Inspector, warnError, warnException } from './impl/traceback'
 import { BlocklyInstance, Extension } from './impl/blockly'
@@ -42,8 +40,9 @@ import { LppTraceback } from './impl/context'
 import * as Serialization from './impl/serialization'
 import { Wrapper } from './impl/wrapper'
 import { attachType } from './impl/metadata'
-import { isPromise, withValue } from './core/helper'
+import { isPromise, raise, withValue } from './core/helper'
 import { ImmediatePromise, PromiseProxy } from './impl/promise'
+import { ThreadController } from './impl/thread'
 
 declare let Scratch: ScratchContext
 ;(function (Scratch: ScratchContext) {
@@ -85,6 +84,10 @@ declare let Scratch: ScratchContext
      * Blockly extension.
      */
     readonly extension: Extension
+    /**
+     * thread controller.
+     */
+    _threadController?: ThreadController
     /**
      * Scratch util.
      */
@@ -246,10 +249,13 @@ declare let Scratch: ScratchContext
         }
       }
       // TODO: Array support
+      console.log(
+        '🧪 You are using experimental feature -- array monitor. This feature is working in progress, so do not report issues about it.'
+      )
       const _requestUpdateMonitor = runtime.requestUpdateMonitor
       if (_requestUpdateMonitor) {
         const patchMonitorValue = (element: HTMLElement, value: unknown) => {
-          const valueElement = element.querySelector('[class*="value"]')
+          const valueElement = element.querySelector('[class*="value-"]')
           if (valueElement instanceof HTMLElement) {
             const internalInstance = Object.values(valueElement).find(
               v =>
@@ -284,6 +290,52 @@ declare let Scratch: ScratchContext
             }
           }
         }
+        const patchMonitorArray = (element: HTMLElement, values: unknown[]) => {
+          const valueElement = Object.values(
+            element.querySelectorAll('[class*="value-"]')
+          )
+          for (const [key, value] of values.entries()) {
+            const element = valueElement[key]
+            if (element instanceof HTMLElement) {
+              const internalInstance = Object.values(element).find(
+                v =>
+                  typeof v === 'object' &&
+                  v !== null &&
+                  Reflect.has(v, 'stateNode')
+              )
+              const unwrappedValue = Wrapper.unwrap(value)
+              if (
+                unwrappedValue instanceof LppValue ||
+                unwrappedValue instanceof LppReference
+              ) {
+                if (internalInstance.child) internalInstance.child = null
+                const inspector = Inspector(
+                  this.Blockly,
+                  this.vm,
+                  this.formatMessage.bind(this),
+                  ensureValue(unwrappedValue)
+                )
+                element.style.textAlign = 'left'
+                element.style.backgroundColor = 'rgb(30, 30, 30)'
+                element.style.color = '#eeeeee'
+                while (element.firstChild)
+                  element.removeChild(element.firstChild)
+                element.append(inspector)
+              } else {
+                if (internalInstance) {
+                  element.style.textAlign = ''
+                  element.style.backgroundColor =
+                    internalInstance.memoizedProps?.style?.background ?? ''
+                  element.style.color =
+                    internalInstance.memoizedProps?.style?.color ?? ''
+                  while (element.firstChild)
+                    element.removeChild(element.firstChild)
+                  element.append(String(value))
+                }
+              }
+            }
+          }
+        }
         const getMonitorById = (id: string): HTMLElement | null => {
           const elements = document.querySelectorAll(
             `[class*="monitor_monitor-container"]`
@@ -302,13 +354,15 @@ declare let Scratch: ScratchContext
           }
           return null
         }
-        const monitorMap: Map<
-          string,
-          {
-            value?: LppValue
-            mode: string
-          }
-        > = new Map()
+        interface ValueStatus {
+          value?: LppValue
+          mode: string
+        }
+        interface ArrayStatus {
+          value: unknown[]
+          mode?: never
+        }
+        const monitorMap: Map<string, ValueStatus | ArrayStatus> = new Map()
         runtime.requestUpdateMonitor = state => {
           const id = state.get('id')
           if (typeof id === 'string') {
@@ -316,7 +370,7 @@ declare let Scratch: ScratchContext
             const monitorMode = state.get('mode')
             const monitorVisible = state.get('visible')
             const cache = monitorMap.get(id)
-            if (typeof monitorMode === 'string' && cache) {
+            if (typeof monitorMode === 'string' && cache && cache.mode) {
               // Update the monitor when the mode changes.
               // Since value update is followed by monitorMode, we just set value to `undefined`.
               cache.mode = monitorMode
@@ -355,6 +409,27 @@ declare let Scratch: ScratchContext
                   } else cache.value = actualValue
                 }
                 return true
+              } else if (monitorValue instanceof Array) {
+                const compare = (arr1: unknown[], arr2: unknown[]): boolean => {
+                  return (
+                    arr1.length === arr2.length &&
+                    arr1.every((v, i) => v === arr2[i])
+                  )
+                }
+                if (!cache || !('mode' in cache)) {
+                  const oldValue = cache?.value
+                  if (!oldValue || !compare(monitorValue, oldValue)) {
+                    requestAnimationFrame(() => {
+                      const monitor = getMonitorById(id)
+                      if (monitor) {
+                        patchMonitorArray(monitor, monitorValue)
+                      }
+                    })
+                    monitorMap.set(id, {
+                      value: Object.assign([], monitorValue)
+                    })
+                  } else return true
+                }
               } else {
                 // Remove cachedValue from database.
                 if (monitorMap.has(id)) {
@@ -384,11 +459,7 @@ declare let Scratch: ScratchContext
             !Serialization.hasMetadata(fn) ||
             fn.isTypehint
           ) {
-            const res = Global.IllegalInvocationError.construct([])
-            return withValue(res, v => {
-              if (v instanceof LppException) return v
-              return new LppException(v.value)
-            })
+            return raise(Global.IllegalInvocationError.construct([]))
           }
           return new LppReturn(
             LppExtension.serializeFunction(
@@ -403,15 +474,9 @@ declare let Scratch: ScratchContext
         'deserialize',
         LppFunction.native((self, args) => {
           if (self !== Global.Function) {
-            const res = Global.IllegalInvocationError.construct([])
-            return withValue(res, v => {
-              if (v instanceof LppException) return v
-              return new LppException(v.value)
-            })
+            return raise(Global.IllegalInvocationError.construct([]))
           }
-          const val: unknown = deserializeObject(
-            args[0] ?? new LppConstant(null)
-          )
+          const val: unknown = ffi.toObject(args[0] ?? new LppConstant(null))
           if (Serialization.Validator.isInfo(val)) {
             if (!val.block) {
               const fn = new LppFunction(() => {
@@ -463,12 +528,11 @@ declare let Scratch: ScratchContext
                   //   thread.lpp.closure.set('arguments', value)
                   // })
                   // Call callback (if exists) when the thread is finished.
-                  this.bindThread(thread, () => {
+                  this.threadController.wait(thread).then(() => {
                     ;(thread as Thread)?.lpp?.returnCallback(
                       new LppReturn(new LppConstant(null))
                     )
                   })
-                  this.stepThread(thread)
                 })
               )
             })
@@ -481,28 +545,15 @@ declare let Scratch: ScratchContext
             )
             return new LppReturn(fn)
           }
-          const res = Global.SyntaxError.construct([
-            new LppConstant('Invalid value')
-          ])
-          return withValue(res, v => {
-            if (v instanceof LppException) return v
-            return new LppException(v.value)
-          })
+          return raise(
+            Global.SyntaxError.construct([new LppConstant('Invalid value')])
+          )
         })
       )
       attachType()
       // Export
       runtime.lpp = {
-        LppValue,
-        LppReference,
-        LppConstant,
-        LppArray,
-        LppObject,
-        LppFunction,
-        LppReturn,
-        LppException,
-        LppPromise,
-        Wrapper,
+        core,
         Serialization,
         version: lppVersion,
         global
@@ -815,38 +866,39 @@ declare let Scratch: ScratchContext
     ): PromiseProxy<Wrapper<LppValue>> | Wrapper<LppValue> {
       const { thread } = util
       this.util = util
-      return this.asap(() => {
-        try {
-          let { fn } = args
-          fn = Wrapper.unwrap(fn)
-          const actualArgs: LppValue[] = []
-          // runtime hack by @FurryR.
-          const block = this.getActiveBlockInstance(args, thread)
-          const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
-          for (let i = 0; i < len; i++) {
-            const value = Wrapper.unwrap(args[`ARG_${i}`])
-            if (value instanceof LppValue || value instanceof LppReference)
-              actualArgs[i] = ensureValue(value)
-            else throw new LppError('syntaxError')
-          }
-          if (!(fn instanceof LppValue || fn instanceof LppReference))
-            throw new LppError('syntaxError')
-          const func = ensureValue(fn)
-          if (!(func instanceof LppFunction)) throw new LppError('notCallable')
-          const res = func.apply(
-            fn instanceof LppReference
-              ? fn.parent.deref() ?? new LppConstant(null)
-              : new LppConstant(null),
-            actualArgs
-          )
-          return withValue(
+      try {
+        let { fn } = args
+        fn = Wrapper.unwrap(fn)
+        const actualArgs: LppValue[] = []
+        // runtime hack by @FurryR.
+        const block = this.getActiveBlockInstance(args, thread)
+        const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
+        for (let i = 0; i < len; i++) {
+          const value = Wrapper.unwrap(args[`ARG_${i}`])
+          if (value instanceof LppValue || value instanceof LppReference)
+            actualArgs[i] = ensureValue(value)
+          else throw new LppError('syntaxError')
+        }
+        if (!(fn instanceof LppValue || fn instanceof LppReference))
+          throw new LppError('syntaxError')
+        const func = ensureValue(fn)
+        if (!(func instanceof LppFunction)) throw new LppError('notCallable')
+        const res = func.apply(
+          fn instanceof LppReference
+            ? fn.parent.deref() ?? new LppConstant(null)
+            : new LppConstant(null),
+          actualArgs
+        )
+        return this.asap(
+          withValue(
             res,
             result => new Wrapper(this.processApplyValue(result, thread))
-          )
-        } catch (e) {
-          this.handleError(e)
-        }
-      }, thread)
+          ),
+          thread
+        )
+      } catch (e) {
+        this.handleError(e)
+      }
     }
     /**
      * Generate a new object by function with arguments.
@@ -863,34 +915,35 @@ declare let Scratch: ScratchContext
     ): PromiseProxy<Wrapper<LppValue>> | Wrapper<LppValue> {
       const { thread } = util
       this.util = util
-      return this.asap(() => {
-        try {
-          let { fn } = args
-          fn = Wrapper.unwrap(fn)
-          // runtime hack by @FurryR.
-          const actualArgs: LppValue[] = []
-          // runtime hack by @FurryR.
-          const block = this.getActiveBlockInstance(args, thread)
-          const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
-          for (let i = 0; i < len; i++) {
-            const value = Wrapper.unwrap(args[`ARG_${i}`])
-            if (value instanceof LppValue || value instanceof LppReference)
-              actualArgs[i] = ensureValue(value)
-            else throw new LppError('syntaxError')
-          }
-          if (!(fn instanceof LppValue || fn instanceof LppReference))
-            throw new LppError('syntaxError')
-          fn = ensureValue(fn)
-          if (!(fn instanceof LppFunction)) throw new LppError('notCallable')
-          const res = fn.construct(actualArgs)
-          return withValue(
+      try {
+        let { fn } = args
+        fn = Wrapper.unwrap(fn)
+        // runtime hack by @FurryR.
+        const actualArgs: LppValue[] = []
+        // runtime hack by @FurryR.
+        const block = this.getActiveBlockInstance(args, thread)
+        const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
+        for (let i = 0; i < len; i++) {
+          const value = Wrapper.unwrap(args[`ARG_${i}`])
+          if (value instanceof LppValue || value instanceof LppReference)
+            actualArgs[i] = ensureValue(value)
+          else throw new LppError('syntaxError')
+        }
+        if (!(fn instanceof LppValue || fn instanceof LppReference))
+          throw new LppError('syntaxError')
+        fn = ensureValue(fn)
+        if (!(fn instanceof LppFunction)) throw new LppError('notCallable')
+        const res = fn.construct(actualArgs)
+        return this.asap(
+          withValue(
             res,
             result => new Wrapper(this.processApplyValue(result, thread))
-          )
-        } catch (e) {
-          this.handleError(e)
-        }
-      }, thread)
+          ),
+          thread
+        )
+      } catch (e) {
+        this.handleError(e)
+      }
     }
     /**
      * Return self object.
@@ -1049,7 +1102,7 @@ declare let Scratch: ScratchContext
           if (!block.inputs.SUBSTACK)
             return new LppReturn(new LppConstant(null))
           const id = block.inputs.SUBSTACK.block
-          const thread = this.vm.runtime._pushThread(id, target) as Thread
+          const thread = this.threadController.create(id, target)
           return ImmediatePromise.sync(
             new ImmediatePromise(resolve => {
               thread.lpp = new LppFunctionContext(
@@ -1071,12 +1124,11 @@ declare let Scratch: ScratchContext
               //   thread.lpp.closure.set('arguments', value)
               // })
               // Call callback (if exists) when the thread is finished.
-              this.bindThread(thread, () => {
+              this.threadController.wait(thread).then(() => {
                 ;(thread as Thread)?.lpp?.returnCallback(
                   new LppReturn(new LppConstant(null))
                 )
               })
-              this.stepThread(thread)
             })
           )
         })
@@ -1181,16 +1233,16 @@ declare let Scratch: ScratchContext
     ): PromiseProxy<undefined> | undefined {
       const { thread, target } = util
       this.util = util
-      return this.asap(() => {
-        try {
-          // runtime hack by @FurryR.
-          const block = this.getActiveBlockInstance(args, thread)
-          const id = block.inputs.SUBSTACK?.block
-          if (!id) return
-          const parentThread = thread as Thread
-          const scopeThread = this.vm.runtime._pushThread(id, target) as Thread
-          return ImmediatePromise.sync(
+      try {
+        // runtime hack by @FurryR.
+        const block = this.getActiveBlockInstance(args, thread)
+        const id = block.inputs.SUBSTACK?.block
+        if (!id) return
+        const parentThread = thread as Thread
+        return this.asap(
+          ImmediatePromise.sync(
             new ImmediatePromise<undefined>(resolve => {
+              const scopeThread = this.threadController.create(id, target)
               scopeThread.lpp = new LppContext(
                 parentThread.lpp ?? undefined,
                 value => {
@@ -1208,16 +1260,16 @@ declare let Scratch: ScratchContext
                   this.handleException(value)
                 }
               )
-              this.bindThread(scopeThread, () => {
-                resolve(undefined)
-              })
-              this.stepThread(scopeThread)
+              resolve(
+                this.threadController.wait(scopeThread).then(() => undefined)
+              )
             })
-          )
-        } catch (e) {
-          this.handleError(e)
-        }
-      }, thread)
+          ),
+          thread
+        )
+      } catch (e) {
+        this.handleError(e)
+      }
     }
     /**
      * Catch exceptions.
@@ -1231,19 +1283,19 @@ declare let Scratch: ScratchContext
     ): PromiseProxy<undefined> | undefined {
       const { thread, target } = util
       this.util = util
-      return this.asap(() => {
-        try {
-          // runtime hack by @FurryR.
-          const block = this.getActiveBlockInstance(args, thread)
-          const dest = Wrapper.unwrap(args.var)
-          if (!(dest instanceof LppReference)) throw new LppError('syntaxError')
-          const id = block.inputs.SUBSTACK?.block
-          if (!id) return
-          const captureId = block.inputs.SUBSTACK_2?.block
-          const parentThread = thread as Thread
-          const tryThread = this.vm.runtime._pushThread(id, target) as Thread
-          let triggered = false
-          return ImmediatePromise.sync(
+      try {
+        // runtime hack by @FurryR.
+        const block = this.getActiveBlockInstance(args, thread)
+        const dest = Wrapper.unwrap(args.var)
+        if (!(dest instanceof LppReference)) throw new LppError('syntaxError')
+        const id = block.inputs.SUBSTACK?.block
+        if (!id) return
+        const captureId = block.inputs.SUBSTACK_2?.block
+        const parentThread = thread as Thread
+        const tryThread = this.threadController.create(id, target)
+        let triggered = false
+        return this.asap(
+          ImmediatePromise.sync(
             new ImmediatePromise<undefined>(resolve => {
               tryThread.lpp = new LppContext(
                 parentThread.lpp ?? undefined,
@@ -1270,10 +1322,10 @@ declare let Scratch: ScratchContext
                     error.set('stack', traceback)
                   }
                   dest.assign(error)
-                  const catchThread = this.vm.runtime._pushThread(
+                  const catchThread = this.threadController.create(
                     captureId,
                     target
-                  ) as Thread
+                  )
                   catchThread.lpp = new LppContext(
                     parentThread.lpp ?? undefined,
                     value => {
@@ -1291,24 +1343,23 @@ declare let Scratch: ScratchContext
                       this.handleException(value)
                     }
                   )
-                  this.bindThread(catchThread, () => {
+                  this.threadController.wait(catchThread).then(() => {
                     resolve(undefined)
                   })
-                  this.stepThread(catchThread)
                 }
               )
-              this.bindThread(tryThread, () => {
+              this.threadController.wait(tryThread).then(() => {
                 if (!triggered) {
                   resolve(undefined)
                 }
               })
-              this.stepThread(tryThread)
             })
-          )
-        } catch (e) {
-          this.handleError(e)
-        }
-      }, thread)
+          ),
+          thread
+        )
+      } catch (e) {
+        this.handleError(e)
+      }
     }
     /**
      * Drops the value of specified expression.
@@ -1364,40 +1415,12 @@ declare let Scratch: ScratchContext
       throw new Error('lpp: user exception')
     }
     /**
-     * Bind fn to thread. Fn will be called when the thread exits.
-     * @param thread Thread object.
-     * @param fn Dedicated function.
-     */
-    private bindThread(thread: Thread, fn: () => void) {
-      // Call callback (if exists) when the thread is finished.
-      let status = thread.status
-      let alreadyCalled = false
-      const threadConstructor = thread.constructor as ThreadConstructor
-      Reflect.defineProperty(thread, 'status', {
-        get: () => {
-          return status
-        },
-        set: newStatus => {
-          status = newStatus
-          if (status === threadConstructor.STATUS_DONE) {
-            if (!alreadyCalled) {
-              alreadyCalled = true
-              fn()
-            }
-          }
-        }
-      })
-    }
-    /**
      * Process return value.
      * @param result Result value.
      * @param thread Caller thread.
      * @returns processed value.
      */
-    private processApplyValue(
-      result: LppReturnOrException,
-      thread: Thread
-    ): LppValue {
+    private processApplyValue(result: LppResult, thread: Thread): LppValue {
       if (result instanceof LppReturn) {
         return result.value
       } else {
@@ -1479,45 +1502,31 @@ declare let Scratch: ScratchContext
       return target
     }
     /**
-     * Method for compiler to fix globalState.
-     * @param thread Thread instance.
-     * @param callerThread Caller thread.
-     */
-    private stepThread(thread: Thread) {
-      const callerThread = this.util?.thread as Thread
-      this.vm.runtime.sequencer.stepThread(thread)
-      if (this.util && callerThread) this.util.thread = callerThread // restore interpreter context
-      if (
-        thread.isCompiled &&
-        callerThread &&
-        callerThread.isCompiled &&
-        callerThread.generator
-      ) {
-        const orig = callerThread.generator
-        callerThread.generator = {
-          next: () => {}
-        }
-        this.vm.runtime.sequencer.stepThread(callerThread) // restore compiler context (globalState)
-        callerThread.generator = orig
-      }
-    }
-    /**
      * Process result as soon as possible.
-     * @param fn Function that returns result.
+     * @param res Result.
      * @param thread Caller thread.
      * @returns Processed promise or value.
      */
     private asap<T>(
-      fn: () => T | PromiseLike<T>,
+      res: T | PromiseLike<T>,
       thread: Thread
     ): T | PromiseProxy<T> {
-      const res = fn()
       const postProcess = () => {
-        this.stepThread(thread)
+        this.threadController.step(thread)
       }
       return isPromise(res)
-        ? new PromiseProxy(res, postProcess, postProcess)
+        ? new PromiseProxy<T>(res, postProcess, postProcess)
         : res
+    }
+    private get threadController(): ThreadController {
+      if (this._threadController) return this._threadController
+      if (this.util) {
+        return (this._threadController = new ThreadController(
+          this.vm.runtime as LppCompatibleRuntime,
+          this.util
+        ))
+      }
+      throw new Error('lpp: used threadController before initialization')
     }
     /**
      * Serialize function.
@@ -1532,7 +1541,7 @@ declare let Scratch: ScratchContext
       signature: string[]
     ): LppValue {
       if (!block || !blocks)
-        return serializeObject({
+        return ffi.fromObject({
           signature,
           script: {},
           block: null
@@ -1542,7 +1551,7 @@ declare let Scratch: ScratchContext
         script: Serialization.serializeBlock(blocks as Blocks, block),
         block: block.id
       }
-      return serializeObject(info)
+      return ffi.fromObject(info)
     }
   }
   if (Scratch.vm?.runtime) {

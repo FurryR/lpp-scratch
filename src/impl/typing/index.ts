@@ -1,20 +1,7 @@
 import type * as OriginalVM from 'scratch-vm'
 import type { Message } from 'format-message'
-import type {
-  LppArray,
-  LppReference,
-  LppConstant,
-  LppContext,
-  LppException,
-  LppFunction,
-  LppObject,
-  LppPromise,
-  LppReturn,
-  LppValue,
-  global
-} from 'src/core'
+import type * as core from 'src/core'
 import type * as Serialization from '../serialization'
-import { Wrapper } from '../wrapper'
 
 /**
  * Definition of Scratch extension.
@@ -45,19 +32,10 @@ export interface ScratchContext {
  */
 export interface LppCompatibleRuntime extends VM.Runtime {
   lpp?: {
-    LppValue: typeof LppValue
-    LppReference: typeof LppReference
-    LppConstant: typeof LppConstant
-    LppArray: typeof LppArray
-    LppObject: typeof LppObject
-    LppFunction: typeof LppFunction
-    LppPromise: typeof LppPromise
-    LppReturn: typeof LppReturn
-    LppException: typeof LppException
-    Wrapper: typeof Wrapper
+    core: typeof core
     Serialization: typeof Serialization
     version: string
-    global: typeof global
+    global: typeof core.global
   }
   requestUpdateMonitor?(state: Map<string, unknown>): boolean
   getMonitorState?(): Map<string, unknown>
@@ -73,7 +51,7 @@ export interface LppCompatibleRuntime extends VM.Runtime {
  * Definition of lpp compatible thread.
  */
 export interface Thread extends VM.Thread {
-  lpp?: LppContext
+  lpp?: core.LppContext
   isCompiled?: boolean
   generator?: {
     next(): unknown

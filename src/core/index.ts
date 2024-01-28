@@ -4,11 +4,5 @@
 export * from './global'
 export * from './context'
 export * from './type'
-export {
-  ensureValue,
-  asBoolean,
-  serializeObject,
-  deserializeObject,
-  isPromise,
-  withValue
-} from './helper'
+export { ensureValue, asBoolean, isPromise, withValue, raise } from './helper'
+export * as ffi from './ffi'
