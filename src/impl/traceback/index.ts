@@ -400,8 +400,8 @@ export function warnException(
   console.groupEnd()
   console.groupEnd()
 }
-
-Dialog.globalStyle.textContent += `
+if (Dialog.globalStyle) {
+  Dialog.globalStyle.textContent += `
 .lpp-list {
   list-style-type: disc;
   padding: 0;
@@ -434,4 +434,5 @@ Dialog.globalStyle.textContent += `
   user-select: text;
 }
 `
+}
 export { Dialog, Inspector }

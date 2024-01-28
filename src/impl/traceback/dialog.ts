@@ -146,9 +146,12 @@ export function Div(
 /**
  * Global style for traceback module.
  */
-export const globalStyle = document.createElement('style')
-globalStyle.id = 'lpp-traceback-style'
-globalStyle.textContent = `
+export const globalStyle: HTMLStyleElement | undefined = document
+  ? document.createElement('style')
+  : undefined
+if (globalStyle) {
+  globalStyle.id = 'lpp-traceback-style'
+  globalStyle.textContent = `
 .lpp-traceback-icon {
   transition: text-shadow 0.25s ease-out;
   color: transparent;
@@ -159,4 +162,5 @@ globalStyle.textContent = `
   text-shadow: 0 0 0 gray, 0px 0px 5px silver;
 }
 `
-document.head.appendChild(globalStyle)
+  document.head.appendChild(globalStyle)
+}

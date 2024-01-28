@@ -269,7 +269,8 @@ export function Inspector(
   }
   throw new Error('lpp: unknown value')
 }
-Dialog.globalStyle.textContent += `
+if (Dialog.globalStyle) {
+  Dialog.globalStyle.textContent += `
 .lpp-inspector-null {
   color: gray;
   user-select: text;
@@ -296,3 +297,4 @@ Dialog.globalStyle.textContent += `
   user-select: text;
 }
 `
+}

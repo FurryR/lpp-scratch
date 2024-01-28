@@ -43,7 +43,7 @@ import * as Serialization from './impl/serialization'
 import { Wrapper } from './impl/wrapper'
 import { attachType } from './impl/metadata'
 import { isPromise, withValue } from './core/helper'
-import { PromiseProxy } from './impl/promise'
+import { ImmediatePromise, PromiseProxy } from './impl/promise'
 
 declare let Scratch: ScratchContext
 ;(function (Scratch: ScratchContext) {
@@ -433,8 +433,6 @@ declare let Scratch: ScratchContext
               const Target = runtime.getTargetForStage()
                 ?.constructor as TargetConstructor
               if (!Target) throw new Error('lpp: project is disposed')
-              let resolveFn: ((v: LppReturnOrException) => void) | undefined
-              let syncResult: LppReturnOrException | undefined
               const target = this.createDummyTarget(Target, blocks)
               const block = blocks.getBlock(val.block ?? '')
               if (!block?.inputs?.SUBSTACK)
@@ -443,41 +441,34 @@ declare let Scratch: ScratchContext
                 block.inputs.SUBSTACK.block,
                 target
               ) as Thread
-              thread.lpp = new LppFunctionContext(
-                undefined,
-                self ?? new LppConstant(null),
-                val => {
-                  if (!syncResult) {
-                    if (resolveFn) resolveFn(val)
-                    else syncResult = val
+              return ImmediatePromise.sync(
+                new ImmediatePromise<LppReturn>(resolve => {
+                  thread.lpp = new LppFunctionContext(
+                    undefined,
+                    self ?? new LppConstant(null),
+                    val => {
+                      resolve(val)
+                    },
+                    val => {
+                      resolve(val)
+                    }
+                  )
+                  for (const [key, value] of val.signature.entries()) {
+                    if (key < args.length)
+                      thread.lpp.closure.set(value, args[key])
+                    else thread.lpp.closure.set(value, new LppConstant(null))
                   }
-                },
-                val => {
-                  if (!syncResult) {
-                    if (resolveFn) resolveFn(val)
-                    else syncResult = val
-                  }
-                }
-              )
-              for (const [key, value] of val.signature.entries()) {
-                if (key < args.length) thread.lpp.closure.set(value, args[key])
-                else thread.lpp.closure.set(value, new LppConstant(null))
-              }
-              // TODO: no reserved variable names!
-              // builtin.Array.apply(null, args).then(value => {
-              //   thread.lpp.closure.set('arguments', value)
-              // })
-              // Call callback (if exists) when the thread is finished.
-              this.bindThread(thread, () => {
-                ;(thread as Thread)?.lpp?.returnCallback(
-                  new LppReturn(new LppConstant(null))
-                )
-              })
-              this.stepThread(thread)
-              return (
-                syncResult ??
-                new Promise<LppReturnOrException>(resolve => {
-                  resolveFn = resolve
+                  // TODO: no reserved variable names!
+                  // builtin.Array.apply(null, args).then(value => {
+                  //   thread.lpp.closure.set('arguments', value)
+                  // })
+                  // Call callback (if exists) when the thread is finished.
+                  this.bindThread(thread, () => {
+                    ;(thread as Thread)?.lpp?.returnCallback(
+                      new LppReturn(new LppConstant(null))
+                    )
+                  })
+                  this.stepThread(thread)
                 })
               )
             })
@@ -1052,8 +1043,6 @@ declare let Scratch: ScratchContext
           context = lppThread.lpp
         }
         const fn = new LppFunction((self, args) => {
-          let resolveFn: (v: LppReturnOrException) => void
-          let syncResult: LppReturnOrException | undefined
           const target =
             this.vm.runtime.getTargetById(targetId) ??
             this.createDummyTarget(Target, blocks)
@@ -1061,41 +1050,33 @@ declare let Scratch: ScratchContext
             return new LppReturn(new LppConstant(null))
           const id = block.inputs.SUBSTACK.block
           const thread = this.vm.runtime._pushThread(id, target) as Thread
-          thread.lpp = new LppFunctionContext(
-            context,
-            self ?? new LppConstant(null),
-            val => {
-              if (!syncResult) {
-                if (resolveFn) resolveFn(val)
-                else syncResult = val
+          return ImmediatePromise.sync(
+            new ImmediatePromise(resolve => {
+              thread.lpp = new LppFunctionContext(
+                context,
+                self ?? new LppConstant(null),
+                val => {
+                  resolve(val)
+                },
+                val => {
+                  resolve(val)
+                }
+              )
+              for (const [key, value] of signature.entries()) {
+                if (key < args.length) thread.lpp.closure.set(value, args[key])
+                else thread.lpp.closure.set(value, new LppConstant(null))
               }
-            },
-            val => {
-              if (!syncResult) {
-                if (resolveFn) resolveFn(val)
-                else syncResult = val
-              }
-            }
-          )
-          for (const [key, value] of signature.entries()) {
-            if (key < args.length) thread.lpp.closure.set(value, args[key])
-            else thread.lpp.closure.set(value, new LppConstant(null))
-          }
-          // TODO: no reserved variable names!
-          // builtin.Array.apply(null, args).then(value => {
-          //   thread.lpp.closure.set('arguments', value)
-          // })
-          // Call callback (if exists) when the thread is finished.
-          this.bindThread(thread, () => {
-            ;(thread as Thread)?.lpp?.returnCallback(
-              new LppReturn(new LppConstant(null))
-            )
-          })
-          this.stepThread(thread)
-          return (
-            syncResult ??
-            new Promise<LppReturnOrException>(resolve => {
-              resolveFn = resolve
+              // TODO: no reserved variable names!
+              // builtin.Array.apply(null, args).then(value => {
+              //   thread.lpp.closure.set('arguments', value)
+              // })
+              // Call callback (if exists) when the thread is finished.
+              this.bindThread(thread, () => {
+                ;(thread as Thread)?.lpp?.returnCallback(
+                  new LppReturn(new LppConstant(null))
+                )
+              })
+              this.stepThread(thread)
             })
           )
         })
@@ -1208,34 +1189,31 @@ declare let Scratch: ScratchContext
           if (!id) return
           const parentThread = thread as Thread
           const scopeThread = this.vm.runtime._pushThread(id, target) as Thread
-          let resolveFn: (_: undefined) => void
-          let resolved = false
-          scopeThread.lpp = new LppContext(
-            parentThread.lpp ?? undefined,
-            value => {
-              if (parentThread.lpp) {
-                parentThread.lpp.returnCallback(value)
-                return scopeThread.stopThisScript()
-              } else throw new LppError('useOutsideFunction')
-            },
-            value => {
-              if (parentThread.lpp) {
-                // interrupt the thread.
-                parentThread.lpp.exceptionCallback(value)
-                return thread.stopThisScript()
-              }
-              this.handleException(value)
-            }
+          return ImmediatePromise.sync(
+            new ImmediatePromise<undefined>(resolve => {
+              scopeThread.lpp = new LppContext(
+                parentThread.lpp ?? undefined,
+                value => {
+                  if (parentThread.lpp) {
+                    parentThread.lpp.returnCallback(value)
+                    return scopeThread.stopThisScript()
+                  } else throw new LppError('useOutsideFunction')
+                },
+                value => {
+                  if (parentThread.lpp) {
+                    // interrupt the thread.
+                    parentThread.lpp.exceptionCallback(value)
+                    return thread.stopThisScript()
+                  }
+                  this.handleException(value)
+                }
+              )
+              this.bindThread(scopeThread, () => {
+                resolve(undefined)
+              })
+              this.stepThread(scopeThread)
+            })
           )
-          this.bindThread(scopeThread, () => {
-            if (resolveFn) resolveFn(undefined)
-            else resolved = true
-          })
-          this.stepThread(scopeThread)
-          if (resolved) return
-          return new Promise<undefined>(resolve => {
-            resolveFn = resolve
-          })
         } catch (e) {
           this.handleError(e)
         }
@@ -1265,73 +1243,68 @@ declare let Scratch: ScratchContext
           const parentThread = thread as Thread
           const tryThread = this.vm.runtime._pushThread(id, target) as Thread
           let triggered = false
-          let resolveFn: ((_: undefined) => void) | undefined
-          let resolved = false
-          tryThread.lpp = new LppContext(
-            parentThread.lpp ?? undefined,
-            value => {
-              if (parentThread.lpp) {
-                parentThread.lpp.returnCallback(value)
-                return tryThread.stopThisScript()
-              } else throw new LppError('useOutsideFunction')
-            },
-            value => {
-              triggered = true
-              if (!captureId) {
-                if (resolveFn) resolveFn(undefined)
-                else resolved = true
-                return
-              }
-              const GlobalError = global.get('Error')
-              if (!(GlobalError instanceof LppFunction))
-                throw new Error('lpp: not implemented')
-              const error = value.value
-              if (error.instanceof(GlobalError)) {
-                const traceback = new LppArray(
-                  value.stack.map(v => new LppConstant(v.toString()))
-                )
-                error.set('stack', traceback)
-              }
-              dest.assign(error)
-              const catchThread = this.vm.runtime._pushThread(
-                captureId,
-                target
-              ) as Thread
-              catchThread.lpp = new LppContext(
+          return ImmediatePromise.sync(
+            new ImmediatePromise<undefined>(resolve => {
+              tryThread.lpp = new LppContext(
                 parentThread.lpp ?? undefined,
                 value => {
                   if (parentThread.lpp) {
                     parentThread.lpp.returnCallback(value)
-                    return thread.stopThisScript()
+                    return tryThread.stopThisScript()
                   } else throw new LppError('useOutsideFunction')
                 },
                 value => {
-                  if (parentThread.lpp) {
-                    // interrupt the thread.
-                    parentThread.lpp.exceptionCallback(value)
-                    return thread.stopThisScript()
+                  triggered = true
+                  if (!captureId) {
+                    resolve(undefined)
+                    return
                   }
-                  this.handleException(value)
+                  const GlobalError = global.get('Error')
+                  if (!(GlobalError instanceof LppFunction))
+                    throw new Error('lpp: not implemented')
+                  const error = value.value
+                  if (error.instanceof(GlobalError)) {
+                    const traceback = new LppArray(
+                      value.stack.map(v => new LppConstant(v.toString()))
+                    )
+                    error.set('stack', traceback)
+                  }
+                  dest.assign(error)
+                  const catchThread = this.vm.runtime._pushThread(
+                    captureId,
+                    target
+                  ) as Thread
+                  catchThread.lpp = new LppContext(
+                    parentThread.lpp ?? undefined,
+                    value => {
+                      if (parentThread.lpp) {
+                        parentThread.lpp.returnCallback(value)
+                        return thread.stopThisScript()
+                      } else throw new LppError('useOutsideFunction')
+                    },
+                    value => {
+                      if (parentThread.lpp) {
+                        // interrupt the thread.
+                        parentThread.lpp.exceptionCallback(value)
+                        return thread.stopThisScript()
+                      }
+                      this.handleException(value)
+                    }
+                  )
+                  this.bindThread(catchThread, () => {
+                    resolve(undefined)
+                  })
+                  this.stepThread(catchThread)
                 }
               )
-              this.bindThread(catchThread, () => {
-                if (resolveFn) resolveFn(undefined)
-                else resolved = true
+              this.bindThread(tryThread, () => {
+                if (!triggered) {
+                  resolve(undefined)
+                }
               })
-              this.stepThread(catchThread)
-            }
+              this.stepThread(tryThread)
+            })
           )
-          this.bindThread(tryThread, () => {
-            if (!triggered) {
-              if (resolveFn) resolveFn(undefined)
-              else resolved = true
-            }
-          })
-          this.stepThread(tryThread)
-          if (resolved) return
-          return new Promise<undefined>(resolve => {
-            resolveFn = resolve
-          })
         } catch (e) {
           this.handleError(e)
         }

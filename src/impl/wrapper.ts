@@ -1,13 +1,7 @@
 /**
- * Wrapable object interface.
- */
-export interface Wrapable {
-  toString(): string
-}
-/**
  * Wrapper for Scratch monitors.
  */
-export class Wrapper<T extends Wrapable> extends String {
+export class Wrapper<T> extends String {
   /**
    * Unwraps a wrapped object.
    * @param value Wrapped object.
@@ -21,13 +15,13 @@ export class Wrapper<T extends Wrapable> extends String {
    * @returns String display.
    */
   toString() {
-    return this.value.toString()
+    return String(this.value)
   }
   /**
    * Construct a wrapped value.
    * @param value Value to wrap.
    */
   constructor(public value: T) {
-    super(value.toString())
+    super(value)
   }
 }
