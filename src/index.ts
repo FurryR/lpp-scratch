@@ -248,14 +248,10 @@ declare let Scratch: ScratchContext
           return _visualReport.call(runtime, blockId, value)
         }
       }
-      // TODO: Array support
-      console.log(
-        '🧪 You are using experimental feature -- array monitor. This feature is working in progress, so do not report issues about it.'
-      )
       const _requestUpdateMonitor = runtime.requestUpdateMonitor
       if (_requestUpdateMonitor) {
         const patchMonitorValue = (element: HTMLElement, value: unknown) => {
-          const valueElement = element.querySelector('[class*="value-"]')
+          const valueElement = element.querySelector('[class*="value"]')
           if (valueElement instanceof HTMLElement) {
             const internalInstance = Object.values(valueElement).find(
               v =>
@@ -290,52 +286,6 @@ declare let Scratch: ScratchContext
             }
           }
         }
-        const patchMonitorArray = (element: HTMLElement, values: unknown[]) => {
-          const valueElement = Object.values(
-            element.querySelectorAll('[class*="value-"]')
-          )
-          for (const [key, value] of values.entries()) {
-            const element = valueElement[key]
-            if (element instanceof HTMLElement) {
-              const internalInstance = Object.values(element).find(
-                v =>
-                  typeof v === 'object' &&
-                  v !== null &&
-                  Reflect.has(v, 'stateNode')
-              )
-              const unwrappedValue = Wrapper.unwrap(value)
-              if (
-                unwrappedValue instanceof LppValue ||
-                unwrappedValue instanceof LppReference
-              ) {
-                if (internalInstance.child) internalInstance.child = null
-                const inspector = Inspector(
-                  this.Blockly,
-                  this.vm,
-                  this.formatMessage.bind(this),
-                  ensureValue(unwrappedValue)
-                )
-                element.style.textAlign = 'left'
-                element.style.backgroundColor = 'rgb(30, 30, 30)'
-                element.style.color = '#eeeeee'
-                while (element.firstChild)
-                  element.removeChild(element.firstChild)
-                element.append(inspector)
-              } else {
-                if (internalInstance) {
-                  element.style.textAlign = ''
-                  element.style.backgroundColor =
-                    internalInstance.memoizedProps?.style?.background ?? ''
-                  element.style.color =
-                    internalInstance.memoizedProps?.style?.color ?? ''
-                  while (element.firstChild)
-                    element.removeChild(element.firstChild)
-                  element.append(String(value))
-                }
-              }
-            }
-          }
-        }
         const getMonitorById = (id: string): HTMLElement | null => {
           const elements = document.querySelectorAll(
             `[class*="monitor_monitor-container"]`
@@ -354,15 +304,13 @@ declare let Scratch: ScratchContext
           }
           return null
         }
-        interface ValueStatus {
-          value?: LppValue
-          mode: string
-        }
-        interface ArrayStatus {
-          value: unknown[]
-          mode?: never
-        }
-        const monitorMap: Map<string, ValueStatus | ArrayStatus> = new Map()
+        const monitorMap: Map<
+          string,
+          {
+            value?: LppValue
+            mode: string
+          }
+        > = new Map()
         runtime.requestUpdateMonitor = state => {
           const id = state.get('id')
           if (typeof id === 'string') {
@@ -370,7 +318,7 @@ declare let Scratch: ScratchContext
             const monitorMode = state.get('mode')
             const monitorVisible = state.get('visible')
             const cache = monitorMap.get(id)
-            if (typeof monitorMode === 'string' && cache && cache.mode) {
+            if (typeof monitorMode === 'string' && cache) {
               // Update the monitor when the mode changes.
               // Since value update is followed by monitorMode, we just set value to `undefined`.
               cache.mode = monitorMode
@@ -409,27 +357,6 @@ declare let Scratch: ScratchContext
                   } else cache.value = actualValue
                 }
                 return true
-              } else if (monitorValue instanceof Array) {
-                const compare = (arr1: unknown[], arr2: unknown[]): boolean => {
-                  return (
-                    arr1.length === arr2.length &&
-                    arr1.every((v, i) => v === arr2[i])
-                  )
-                }
-                if (!cache || !('mode' in cache)) {
-                  const oldValue = cache?.value
-                  if (!oldValue || !compare(monitorValue, oldValue)) {
-                    requestAnimationFrame(() => {
-                      const monitor = getMonitorById(id)
-                      if (monitor) {
-                        patchMonitorArray(monitor, monitorValue)
-                      }
-                    })
-                    monitorMap.set(id, {
-                      value: Object.assign([], monitorValue)
-                    })
-                  } else return true
-                }
               } else {
                 // Remove cachedValue from database.
                 if (monitorMap.has(id)) {
