@@ -6,7 +6,8 @@ import {
   Extension,
   Reporter,
   Input,
-  Command
+  Command,
+  Button
 } from './blockly'
 
 /**
@@ -324,6 +325,13 @@ export function defineExtension(
     }
   }
   return new Extension('lpp', color)
+    .register(
+      /// Documentation
+      new Button(
+        'documentation',
+        () => `📄 ${formatMessage('lpp.documentation')}`
+      )
+    )
     .register(
       /// Builtin
       new Category(() => `#️⃣ ${formatMessage('lpp.category.builtin')}`)

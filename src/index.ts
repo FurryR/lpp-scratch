@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2023 凌.
+ * Copyright (c) 2024 凌.
  * This program is licensed under the MIT license.
  */
 
@@ -12,6 +12,7 @@ import {
   ScratchContext,
   TargetConstructor
 } from './impl/typing'
+import icon from './impl/asset/icon'
 import type * as ScratchBlocks from 'blockly/core'
 import {
   global,
@@ -31,7 +32,7 @@ import {
   Global,
   ffi
 } from './core'
-import * as core from './core'
+import * as Core from './core'
 import locale from './impl/l10n'
 import { Dialog, Inspector, warnError, warnException } from './impl/traceback'
 import { BlocklyInstance, Extension } from './impl/blockly'
@@ -480,8 +481,9 @@ declare let Scratch: ScratchContext
       attachType()
       // Export
       runtime.lpp = {
-        core,
         Serialization,
+        Wrapper,
+        Core,
         version: lppVersion,
         global
       }
@@ -506,6 +508,7 @@ declare let Scratch: ScratchContext
       )
       console.log('😄 @Nights https://github.com/Nightre - Technical support')
       console.log('🔤 @CST1229 https://github.com/CST1229 - Technical support')
+      console.log('⭐ @DilemmaGX https://github.com/DilemmaGX - Icon artist')
       console.log(
         '🐺 @VeroFess https://github.com/VeroFess - Technical support'
       )
@@ -544,6 +547,12 @@ declare let Scratch: ScratchContext
           }
         }
       }
+    }
+    /**
+     * Opens documentation.
+     */
+    documentation() {
+      window.open(this.formatMessage('lpp.documentation.url'))
     }
     /**
      * Builtin types.
@@ -1491,19 +1500,30 @@ declare let Scratch: ScratchContext
         name: 'lpp.name',
         description: 'lpp.desc',
         extensionId: 'lpp',
+        iconURL: icon,
         featured: true,
         disabled: false,
-        collaborator: 'FurryR'
+        collaboratorList: [
+          {
+            collaborator: '熊谷 凌',
+            collaboratorURL: 'https://github.com/FurryR'
+          },
+          {
+            collaborator: '...',
+            collaboratorURL: 'https://github.com/FurryR/lpp-scratch'
+          }
+        ]
       },
       // CCW doesn't support languages like ja-jp, so we do not need to add other translations.
       l10n: {
         'zh-cn': {
           'lpp.name': 'lpp',
-          'lpp.desc': '🛠️ (实验性) 向 Scratch 引入 OOP。'
+          'lpp.desc': '🛠️ (实验性) 一门基于 Scratch 的高级编程语言。'
         },
         en: {
           'lpp.name': 'lpp',
-          'lpp.desc': '🛠️ (Experimental) Introduces OOP to Scratch.'
+          'lpp.desc':
+            '🛠️ (Experimental) A high-level programming language based on Scratch'
         }
       }
     })

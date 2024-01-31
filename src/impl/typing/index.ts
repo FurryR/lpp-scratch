@@ -1,7 +1,8 @@
 import type * as OriginalVM from 'scratch-vm'
 import type { Message } from 'format-message'
-import type * as core from 'src/core'
+import type * as Core from 'src/core'
 import type * as Serialization from '../serialization'
+import { Wrapper } from '../wrapper'
 
 /**
  * Definition of Scratch extension.
@@ -32,10 +33,11 @@ export interface ScratchContext {
  */
 export interface LppCompatibleRuntime extends VM.Runtime {
   lpp?: {
-    core: typeof core
     Serialization: typeof Serialization
+    Wrapper: typeof Wrapper
+    Core: typeof Core
     version: string
-    global: typeof core.global
+    global: typeof Core.global
   }
   requestUpdateMonitor?(state: Map<string, unknown>): boolean
   getMonitorState?(): Map<string, unknown>
@@ -51,7 +53,7 @@ export interface LppCompatibleRuntime extends VM.Runtime {
  * Definition of lpp compatible thread.
  */
 export interface Thread extends VM.Thread {
-  lpp?: core.LppContext
+  lpp?: Core.LppContext
   isCompiled?: boolean
   generator?: {
     next(): unknown

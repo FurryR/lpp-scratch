@@ -13,8 +13,10 @@ interface MetadataMap {
     arguments: Record<string, never>
   }
   button: {
+    func: string
     text: string
-    onClick: () => void
+    onClick: () => void // compatible with Gandi IDE: Gandi IDE engineer is noob and they don't know how to handle `func` and `onClick` properly.
+    // TODO: Remove this code when the issue is fixed
   }
 }
 /**
@@ -60,20 +62,21 @@ export class Button implements ExtensionBlock {
   export(): BlockMetadata[] {
     return [
       {
+        func: this.id,
         blockType: 'button',
         text: this.lazyText(),
-        onClick: this.onClick
+        onClick: () => {}
       }
     ]
   }
   /**
    * Construct a button.
+   * @param id Button ID.
    * @param lazyText A function that returns button text.
-   * @param onClick click handler.
    */
   constructor(
-    public lazyText: () => string,
-    public onClick: () => void
+    public id: string,
+    public lazyText: () => string
   ) {}
 }
 /**

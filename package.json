@@ -14,7 +14,7 @@
     "fix": "eslint ./src --fix",
     "build": "tsup --minify",
     "dev": "tsup",
-    "format": "prettier ./src ./doc README.md -c -w"
+    "format": "prettier ./src ./doc *.md -c -w"
   },
   "repository": {
     "type": "git",

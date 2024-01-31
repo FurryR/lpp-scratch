@@ -1,6 +1,10 @@
 export default {
   // Name
   'lpp.name': 'lpp',
+  // Documentation
+  'lpp.documentation': 'Open documentation',
+  'lpp.documentation.url':
+    'https://github.com/FurryR/lpp-scratch/blob/main/README.md',
   // Block
   /// Construction
   'lpp.block.construct.Number': 'Number',

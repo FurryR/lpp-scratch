@@ -1,6 +1,10 @@
 export default {
   // 名称
   'lpp.name': 'lpp',
+  // 文档
+  'lpp.documentation': '打开文档',
+  'lpp.documentation.url':
+    'https://github.com/FurryR/lpp-scratch/blob/main/README-zh_CN.md',
   // 积木
   /// 构造
   'lpp.block.construct.Number': '数字',

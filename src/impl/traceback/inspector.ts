@@ -142,7 +142,7 @@ export function Inspector(
           '[[FunctionLocation]]',
           'lpp-code lpp-inspector-key-constructor'
         ),
-        Dialog.Text(` ➡️ `)
+        Dialog.Text(` ➡︎ `)
       )
       const traceback = document.createElement('span')
       traceback.classList.add('lpp-code')
