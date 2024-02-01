@@ -225,11 +225,13 @@ declare let Scratch: ScratchContext
       // Patch visualReport.
       const _visualReport = runtime.visualReport
       runtime.visualReport = (blockId: string, value: unknown) => {
-        const value2 = Wrapper.unwrap(value)
+        const unwrappedValue = Wrapper.unwrap(value)
         if (
-          (value2 instanceof LppValue || value2 instanceof LppReference) &&
+          (unwrappedValue instanceof LppValue ||
+            unwrappedValue instanceof LppReference) &&
           this.Blockly
         ) {
+          const actualValue = ensureValue(unwrappedValue)
           Dialog.show(
             this.Blockly as BlocklyInstance,
             blockId,
@@ -238,10 +240,10 @@ declare let Scratch: ScratchContext
                 this.Blockly,
                 this.vm,
                 this.formatMessage.bind(this),
-                ensureValue(value2)
+                actualValue
               )
             ],
-            value2 instanceof LppConstant ? 'center' : 'left'
+            actualValue instanceof LppConstant ? 'center' : 'left'
           )
         } else {
           return _visualReport.call(runtime, blockId, value)

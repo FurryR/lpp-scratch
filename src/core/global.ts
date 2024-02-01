@@ -84,7 +84,7 @@ export namespace Global {
       new Map([
         [
           'length',
-          LppFunction.native(self => {
+          LppFunction.native(({ self }) => {
             if (self instanceof LppConstant && typeof self.value === 'string') {
               return new LppReturn(new LppConstant(self.value.length))
             }
@@ -117,7 +117,7 @@ export namespace Global {
       new Map([
         [
           'length',
-          LppFunction.native(self => {
+          LppFunction.native(({ self }) => {
             if (self instanceof LppArray) {
               return new LppReturn(new LppConstant(self.value.length))
             }
