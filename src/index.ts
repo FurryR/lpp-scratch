@@ -86,10 +86,6 @@ declare let Scratch: ScratchContext
      */
     readonly extension: Extension
     /**
-     * thread controller.
-     */
-    _threadController?: ThreadController
-    /**
      * Scratch util.
      */
     util?: VM.BlockUtility
@@ -426,14 +422,17 @@ declare let Scratch: ScratchContext
               const Target = runtime.getTargetForStage()
                 ?.constructor as TargetConstructor
               if (!Target) throw new Error('lpp: project is disposed')
+              if (!this.util)
+                throw new Error('lpp: util used before initialization')
+              const controller = new ThreadController(runtime, this.util)
               const target = this.createDummyTarget(Target, blocks)
               const block = blocks.getBlock(val.block ?? '')
               if (!block?.inputs?.SUBSTACK)
                 return new LppReturn(new LppConstant(null))
-              const thread = runtime._pushThread(
+              const thread = controller.create(
                 block.inputs.SUBSTACK.block,
                 target
-              ) as Thread
+              )
               return ImmediatePromise.sync(
                 new ImmediatePromise<LppReturn>(resolve => {
                   thread.lpp = new LppFunctionContext(
@@ -456,7 +455,7 @@ declare let Scratch: ScratchContext
                   //   thread.lpp.closure.set('arguments', value)
                   // })
                   // Call callback (if exists) when the thread is finished.
-                  this.threadController.wait(thread).then(() => {
+                  controller.wait(thread).then(() => {
                     ;(thread as Thread)?.lpp?.returnCallback(
                       new LppReturn(new LppConstant(null))
                     )
@@ -1035,10 +1034,15 @@ declare let Scratch: ScratchContext
           const target =
             this.vm.runtime.getTargetById(targetId) ??
             this.createDummyTarget(Target, blocks)
-          if (!block.inputs.SUBSTACK)
-            return new LppReturn(new LppConstant(null))
-          const id = block.inputs.SUBSTACK.block
-          const thread = this.threadController.create(id, target)
+          const id = block.inputs.SUBSTACK?.block
+          if (!id) return new LppReturn(new LppConstant(null))
+          if (!this.util)
+            throw new Error('lpp: util used before initialization')
+          const controller = new ThreadController(
+            this.vm.runtime as LppCompatibleRuntime,
+            this.util
+          )
+          const thread = controller.create(id, target)
           return ImmediatePromise.sync(
             new ImmediatePromise(resolve => {
               thread.lpp = new LppFunctionContext(
@@ -1060,7 +1064,7 @@ declare let Scratch: ScratchContext
               //   thread.lpp.closure.set('arguments', value)
               // })
               // Call callback (if exists) when the thread is finished.
-              this.threadController.wait(thread).then(() => {
+              controller.wait(thread).then(() => {
                 ;(thread as Thread)?.lpp?.returnCallback(
                   new LppReturn(new LppConstant(null))
                 )
@@ -1174,11 +1178,16 @@ declare let Scratch: ScratchContext
         const block = this.getActiveBlockInstance(args, thread)
         const id = block.inputs.SUBSTACK?.block
         if (!id) return
+        if (!this.util) throw new Error('lpp: util used initialization')
+        const controller = new ThreadController(
+          this.vm.runtime as LppCompatibleRuntime,
+          this.util
+        )
         const parentThread = thread as Thread
         return this.asap(
           ImmediatePromise.sync(
             new ImmediatePromise<undefined>(resolve => {
-              const scopeThread = this.threadController.create(id, target)
+              const scopeThread = controller.create(id, target)
               scopeThread.lpp = new LppContext(
                 parentThread.lpp ?? undefined,
                 value => {
@@ -1196,9 +1205,7 @@ declare let Scratch: ScratchContext
                   this.handleException(value)
                 }
               )
-              resolve(
-                this.threadController.wait(scopeThread).then(() => undefined)
-              )
+              resolve(controller.wait(scopeThread).then(() => undefined))
             })
           ),
           thread
@@ -1226,9 +1233,14 @@ declare let Scratch: ScratchContext
         if (!(dest instanceof LppReference)) throw new LppError('syntaxError')
         const id = block.inputs.SUBSTACK?.block
         if (!id) return
+        if (!this.util) throw new Error('lpp: util used before initialization')
+        const controller = new ThreadController(
+          this.vm.runtime as LppCompatibleRuntime,
+          this.util
+        )
         const captureId = block.inputs.SUBSTACK_2?.block
         const parentThread = thread as Thread
-        const tryThread = this.threadController.create(id, target)
+        const tryThread = controller.create(id, target)
         let triggered = false
         return this.asap(
           ImmediatePromise.sync(
@@ -1258,10 +1270,7 @@ declare let Scratch: ScratchContext
                     error.set('stack', traceback)
                   }
                   dest.assign(error)
-                  const catchThread = this.threadController.create(
-                    captureId,
-                    target
-                  )
+                  const catchThread = controller.create(captureId, target)
                   catchThread.lpp = new LppContext(
                     parentThread.lpp ?? undefined,
                     value => {
@@ -1279,12 +1288,12 @@ declare let Scratch: ScratchContext
                       this.handleException(value)
                     }
                   )
-                  this.threadController.wait(catchThread).then(() => {
+                  controller.wait(catchThread).then(() => {
                     resolve(undefined)
                   })
                 }
               )
-              this.threadController.wait(tryThread).then(() => {
+              controller.wait(tryThread).then(() => {
                 if (!triggered) {
                   resolve(undefined)
                 }
@@ -1447,22 +1456,17 @@ declare let Scratch: ScratchContext
       res: T | PromiseLike<T>,
       thread: Thread
     ): T | PromiseProxy<T> {
+      if (!this.util) throw new Error('lpp: util used before initialization')
+      const controller = new ThreadController(
+        this.vm.runtime as LppCompatibleRuntime,
+        this.util
+      )
       const postProcess = () => {
-        this.threadController.step(thread)
+        controller.step(thread)
       }
       return isPromise(res)
         ? new PromiseProxy<T>(res, postProcess, postProcess)
         : res
-    }
-    private get threadController(): ThreadController {
-      if (this._threadController) return this._threadController
-      if (this.util) {
-        return (this._threadController = new ThreadController(
-          this.vm.runtime as LppCompatibleRuntime,
-          this.util
-        ))
-      }
-      throw new Error('lpp: used threadController before initialization')
     }
     /**
      * Serialize function.
