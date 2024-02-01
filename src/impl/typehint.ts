@@ -1,13 +1,13 @@
 import { LppFunction, LppReference, LppValue, ensureValue } from 'src/core'
 import { Global } from '../core/global'
-import { attachTypehint } from './serialization'
+import { attach, TypeMetadata } from './metadata'
 /**
  * Attach type hint to builtin functions.
  */
 export function attachType() {
   function attachType(fn: LppValue | LppReference, signature: string[]) {
     const v = ensureValue(fn)
-    if (v instanceof LppFunction) attachTypehint(v, signature)
+    if (v instanceof LppFunction) attach(v, new TypeMetadata(signature))
   }
   attachType(Global.Function.get('prototype').get('apply'), ['self', 'args'])
   attachType(Global.Function.get('deserialize'), ['obj'])

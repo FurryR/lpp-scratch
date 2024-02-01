@@ -28,14 +28,14 @@ export namespace Global {
   /**
    * lpp builtin `Boolean` -- constructor of boolean types.
    */
-  export const Boolean = LppFunction.native((_, args) => {
+  export const Boolean = LppFunction.native(({ args }) => {
     if (args.length < 1) return new LppReturn(new LppConstant(false))
     return new LppReturn(new LppConstant(asBoolean(args[0])))
   }, new LppObject(new Map()))
   /**
    * lpp builtin `Number` -- constructor of number types.
    */
-  export const Number = LppFunction.native((_, args) => {
+  export const Number = LppFunction.native(({ args }) => {
     /**
      * Convert args to number.
      * @param args Array to convert.
@@ -67,7 +67,7 @@ export namespace Global {
    * lpp builtin `String` -- constructor of string types.
    */
   export const String = LppFunction.native(
-    (_, args) => {
+    ({ args }) => {
       /**
        * Convert args to string.
        * @param args Array to convert.
@@ -98,7 +98,7 @@ export namespace Global {
    * lpp builtin `Array` -- constructor of array types.
    */
   export const Array = LppFunction.native(
-    (_, args) => {
+    ({ args }) => {
       /**
        * Convert args to Array object.
        * @param args Array to convert.
@@ -130,7 +130,7 @@ export namespace Global {
   /**
    * lpp builtin `Object` -- constructor of object types.
    */
-  export const Object = LppFunction.native((_, args) => {
+  export const Object = LppFunction.native(({ args }) => {
     /**
      * Convert args to object.
      * @param args Array to convert.
@@ -146,7 +146,7 @@ export namespace Global {
    * lpp builtin `Function` -- constructor of function types.
    */
   export const Function = LppFunction.native(
-    (_, args) => {
+    ({ args }) => {
       if (args.length < 1)
         return new LppReturn(
           new LppFunction(() => {
@@ -161,7 +161,7 @@ export namespace Global {
         ['prototype', ensureValue(Object.get('prototype'))],
         [
           'apply',
-          LppFunction.native((self, args) => {
+          LppFunction.native(({ self, args }) => {
             if (self instanceof LppFunction) {
               let selfArg: LppValue = new LppConstant(null)
               let argArray: LppValue[] = []
@@ -195,7 +195,7 @@ export namespace Global {
    * lpp builtin `Promise` -- represents the eventual completion (or failure) of an asynchronous operation and its resulting value.
    */
   export const Promise = LppFunction.native(
-    (self, args) => {
+    ({ self, args }) => {
       if (
         self instanceof LppPromise &&
         args.length > 0 &&
@@ -205,7 +205,7 @@ export namespace Global {
         // TODO: resolve(v: PromiseLike<...>)
         const temp = LppPromise.generate((resolve, reject) => {
           const res = fn.apply(self, [
-            new LppFunction((_, args) => {
+            new LppFunction(({ args }) => {
               // resolve
               const res = processThenReturn(
                 new LppReturn(args[0] ?? new LppConstant(null)),
@@ -214,7 +214,7 @@ export namespace Global {
               )
               return withValue(res, () => new LppReturn(new LppConstant(null)))
             }),
-            new LppFunction((_, args) => {
+            new LppFunction(({ args }) => {
               reject(args[0] ?? new LppConstant(null))
               return new LppReturn(new LppConstant(null))
             })
@@ -230,7 +230,7 @@ export namespace Global {
       new Map([
         [
           'then',
-          LppFunction.native((self, args) => {
+          LppFunction.native(({ self, args }) => {
             if (self instanceof LppPromise) {
               return new LppReturn(
                 self.done(
@@ -245,7 +245,7 @@ export namespace Global {
         ],
         [
           'catch',
-          LppFunction.native((self, args) => {
+          LppFunction.native(({ self, args }) => {
             if (
               self instanceof LppPromise &&
               args.length > 0 &&
@@ -266,7 +266,7 @@ export namespace Global {
   )
   Promise.set(
     'resolve',
-    LppFunction.native((self, args) => {
+    LppFunction.native(({ self, args }) => {
       if (self !== Promise) {
         return raise(IllegalInvocationError.construct([]))
       }
@@ -283,7 +283,7 @@ export namespace Global {
   )
   Promise.set(
     'reject',
-    LppFunction.native((self, args) => {
+    LppFunction.native(({ self, args }) => {
       if (self !== Promise) {
         return raise(IllegalInvocationError.construct([]))
       }
@@ -297,7 +297,7 @@ export namespace Global {
   /**
    * lpp builtin `Error` -- `Error` objects are thrown when runtime errors occur.
    */
-  export const Error = LppFunction.native((self, args) => {
+  export const Error = LppFunction.native(({ self, args }) => {
     if (self.instanceof(Error)) {
       self.set('value', args[0] ?? new LppConstant(null))
       self.set('stack', new LppConstant(null))
@@ -310,7 +310,7 @@ export namespace Global {
    * Lpp builtin `IllegalInvocationError` -- represents an error when trying to called a function with illegal arguments / context.
    */
   export const IllegalInvocationError = LppFunction.native(
-    (self, args) => {
+    ({ self, args }) => {
       if (self.instanceof(IllegalInvocationError)) {
         const res = Error.apply(self, args)
         return withValue(res, v => {
@@ -327,7 +327,7 @@ export namespace Global {
    * Lpp builtin `SyntaxError` -- represents an error when trying to interpret syntactically invalid code.
    */
   export const SyntaxError = LppFunction.native(
-    (self, args) => {
+    ({ self, args }) => {
       if (self.instanceof(SyntaxError)) {
         const res = Error.apply(self, args)
         return withValue(res, v => {
@@ -344,7 +344,7 @@ export namespace Global {
     new Map([
       [
         'parse',
-        LppFunction.native((self, args) => {
+        LppFunction.native(({ self, args }) => {
           if (self !== JSON) {
             return raise(IllegalInvocationError.construct([]))
           }
@@ -371,7 +371,7 @@ export namespace Global {
       ],
       [
         'stringify',
-        LppFunction.native((self, args) => {
+        LppFunction.native(({ self, args }) => {
           if (self !== JSON) {
             return raise(IllegalInvocationError.construct([]))
           }

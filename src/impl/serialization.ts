@@ -1,5 +1,6 @@
-import type * as VM from 'scratch-vm'
-import { LppFunction } from 'src/core'
+import { LppContext } from 'src/core'
+import { TypeMetadata } from './metadata'
+
 export interface SerializationInfo {
   /**
    * Function signature.
@@ -12,72 +13,26 @@ export interface SerializationInfo {
   /**
    * Function ID.
    */
-  block: string | null
+  block: string
 }
-export interface SerializeMetadata extends LppFunction {
+export class ScratchMetadata extends TypeMetadata {
   /**
-   * Target ID.
+   * Construct a Scratch metadata object.
+   * @param signature Function's signature.
+   * @param blocks Runtime blocks instance (for serialize/deserialize) and Block ID (refers to lpp_constructFunction).
+   * @param sprite Original sprite ID of block container.
+   * @param target Target ID.
+   * @param closure Function's closure.
    */
-  target?: string
-  /**
-   * Runtime blocks instance (for serialize/deserialize).
-   */
-  blocks?: VM.Blocks
-  /**
-   * Block ID (refers to lpp_constructFunction).
-   */
-  block?: string
-  /**
-   * Function's signature.
-   */
-  signature: string[]
-  /**
-   * Is type hint only?
-   * If true, the function is not serializable.
-   */
-  isTypehint: boolean
-}
-/**
- * Attaches metadata (for serialization) to specified function.
- * @param originalFn Function to attach.
- * @param target The target which function belongs to.
- * @param blocks Block container of the function.
- * @param block Function block.
- * @param signature Signature.
- */
-export function attachMetadata(
-  originalFn: LppFunction,
-  target: string | undefined,
-  blocks: VM.Blocks | undefined,
-  block: string | undefined,
-  signature: string[]
-) {
-  const v = originalFn as SerializeMetadata
-  v.target = target
-  v.blocks = blocks
-  v.block = block
-  v.signature = signature
-  v.isTypehint = false
-}
-/**
- * Attach type hint to specified function.
- * @param originalFn Function to attach.
- * @param signature Signature.
- */
-export function attachTypehint(originalFn: LppFunction, signature: string[]) {
-  const v = originalFn as SerializeMetadata
-  v.signature = signature
-  v.isTypehint = true
-}
-export function hasMetadata(fn: LppFunction): fn is SerializeMetadata {
-  const v = fn as SerializeMetadata
-  return (
-    (v.block === undefined || typeof v.block === 'string') &&
-    (v.target === undefined || typeof v.target === 'string') &&
-    v.signature instanceof Array &&
-    v.signature.every(v => typeof v === 'string') &&
-    typeof v.isTypehint === 'boolean'
-  )
+  constructor(
+    signature: string[],
+    public blocks: [VM.Blocks, string],
+    public sprite?: string,
+    public target?: string,
+    public closure?: LppContext
+  ) {
+    super(signature)
+  }
 }
 /**
  * Serialize all blocks related to specified block, including the block itself.
@@ -185,17 +140,19 @@ export namespace Validator {
     if (typeof v.topLevel !== 'boolean') return false
     if (
       !(typeof v.inputs === 'object' && v.inputs !== null) ||
-      !Object.values(v.inputs).every(elem => isInput(container, elem))
+      (!Object.values(v.inputs).every(elem => isInput(container, elem)) &&
+        Object.keys(v.inputs).length !== 0)
     )
       return false
     if (
-      !(v.fields === 'object' && v.fields !== null) ||
-      !Object.values(v.fields).every(v => isField(v))
+      !(typeof v.fields === 'object' && v.fields !== null) ||
+      (!Object.values(v.fields).every(v => isField(v)) &&
+        Object.keys(v.fields).length !== 0)
     )
       return false
     if (
       v.mutation !== undefined &&
-      !(v.mutation === 'object' && v.mutation !== null)
+      !(typeof v.mutation === 'object' && v.mutation !== null)
     )
       return false
     return true
@@ -210,21 +167,19 @@ export namespace Validator {
     const v = value as Record<string, unknown>
     if (
       !(v.signature instanceof Array) ||
-      !v.signature.every(v => typeof v === 'string')
+      (!v.signature.every(v => typeof v === 'string') &&
+        v.signature.length !== 0)
     )
       return false
     if (
       !(typeof v.script === 'object' && v.script !== null) ||
-      !Object.entries(v.script).every(elem =>
+      (!Object.entries(v.script).every(elem =>
         isBlock(v.script as Record<string, unknown>, elem[0], elem[1])
-      )
+      ) &&
+        Object.keys(v.script).length !== 0)
     )
       return false
-    if (
-      v.block !== null &&
-      (typeof v.block !== 'string' || !(v.block in v.script))
-    )
-      return false
+    if (typeof v.block !== 'string' || !(v.block in v.script)) return false
     return true
   }
 }

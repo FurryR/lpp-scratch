@@ -30,7 +30,8 @@ import {
   LppContext,
   LppResult,
   Global,
-  ffi
+  ffi,
+  LppHandle
 } from './core'
 import * as Core from './core'
 import locale from './impl/l10n'
@@ -38,9 +39,10 @@ import { Dialog, Inspector, warnError, warnException } from './impl/traceback'
 import { BlocklyInstance, Extension } from './impl/blockly'
 import { defineExtension } from './impl/block'
 import { LppTraceback } from './impl/context'
+import * as Metadata from './impl/metadata'
 import * as Serialization from './impl/serialization'
 import { Wrapper } from './impl/wrapper'
-import { attachType } from './impl/metadata'
+import { attachType } from './impl/typehint'
 import { isPromise, raise, withValue } from './core/helper'
 import { ImmediatePromise, PromiseProxy } from './impl/promise'
 import { ThreadController } from './impl/thread'
@@ -374,103 +376,54 @@ declare let Scratch: ScratchContext
       // Patch Function.
       Global.Function.set(
         'serialize',
-        LppFunction.native((self, args) => {
+        LppFunction.native(({ self, args }) => {
           const fn = args[0]
           if (
             self !== Global.Function ||
             !fn ||
             !(fn instanceof LppFunction) ||
-            !Serialization.hasMetadata(fn) ||
-            fn.isTypehint
+            !Metadata.hasMetadata(fn) ||
+            !(fn.metadata instanceof Serialization.ScratchMetadata)
           ) {
             return raise(Global.IllegalInvocationError.construct([]))
           }
+          const v = fn.metadata.blocks[0]?.getBlock(fn.metadata.blocks[1])
+          if (!v) throw new Error('lpp: serialize blockId invalid')
           return new LppReturn(
             LppExtension.serializeFunction(
-              fn.blocks && fn.block ? fn.blocks.getBlock(fn.block) : undefined,
-              fn.blocks,
-              fn.signature
+              v,
+              fn.metadata.blocks[0],
+              fn.metadata.signature
             )
           )
         })
       )
       Global.Function.set(
         'deserialize',
-        LppFunction.native((self, args) => {
+        LppFunction.native(({ self, args }) => {
           if (self !== Global.Function) {
             return raise(Global.IllegalInvocationError.construct([]))
           }
           const val: unknown = ffi.toObject(args[0] ?? new LppConstant(null))
           if (Serialization.Validator.isInfo(val)) {
-            if (!val.block) {
-              const fn = new LppFunction(() => {
-                return new LppReturn(new LppConstant(null))
-              })
-              Serialization.attachMetadata(
-                fn,
-                undefined,
-                undefined,
-                undefined,
-                val.signature
-              )
-              return new LppReturn(fn)
-            }
             const Blocks = runtime.flyoutBlocks.constructor as BlocksConstructor
             const blocks = new Blocks(runtime, true)
             Serialization.deserializeBlock(blocks, val.script)
-            const fn = new LppFunction((self, args) => {
-              const Target = runtime.getTargetForStage()
-                ?.constructor as TargetConstructor
-              if (!Target) throw new Error('lpp: project is disposed')
-              if (!this.util)
-                throw new Error('lpp: util used before initialization')
-              const controller = new ThreadController(runtime, this.util)
-              const target = this.createDummyTarget(Target, blocks)
-              const block = blocks.getBlock(val.block ?? '')
-              if (!block?.inputs?.SUBSTACK)
-                return new LppReturn(new LppConstant(null))
-              const thread = controller.create(
-                block.inputs.SUBSTACK.block,
-                target
+            const Target = runtime.getTargetForStage()
+              ?.constructor as TargetConstructor
+            if (!Target) throw new Error('lpp: project is disposed')
+            return new LppReturn(
+              Metadata.attach(
+                new LppFunction(this.executeScratch.bind(this, Target)),
+                new Serialization.ScratchMetadata(
+                  val.signature,
+                  [blocks, val.block],
+                  undefined,
+                  undefined,
+                  undefined
+                )
               )
-              return ImmediatePromise.sync(
-                new ImmediatePromise<LppReturn>(resolve => {
-                  thread.lpp = new LppFunctionContext(
-                    undefined,
-                    self ?? new LppConstant(null),
-                    val => {
-                      resolve(val)
-                    },
-                    val => {
-                      resolve(val)
-                    }
-                  )
-                  for (const [key, value] of val.signature.entries()) {
-                    if (key < args.length)
-                      thread.lpp.closure.set(value, args[key])
-                    else thread.lpp.closure.set(value, new LppConstant(null))
-                  }
-                  // TODO: no reserved variable names!
-                  // builtin.Array.apply(null, args).then(value => {
-                  //   thread.lpp.closure.set('arguments', value)
-                  // })
-                  // Call callback (if exists) when the thread is finished.
-                  controller.wait(thread).then(() => {
-                    ;(thread as Thread)?.lpp?.returnCallback(
-                      new LppReturn(new LppConstant(null))
-                    )
-                  })
-                })
-              )
-            })
-            Serialization.attachMetadata(
-              fn,
-              undefined,
-              blocks,
-              val.block,
-              val.signature
             )
-            return new LppReturn(fn)
           }
           return raise(
             Global.SyntaxError.construct([new LppConstant('Invalid value')])
@@ -480,11 +433,10 @@ declare let Scratch: ScratchContext
       attachType()
       // Export
       runtime.lpp = {
-        Serialization,
-        Wrapper,
         Core,
-        version: lppVersion,
-        global
+        Metadata: Metadata,
+        Wrapper,
+        version: lppVersion
       }
       console.groupCollapsed('💫 lpp', lppVersion)
       console.log('🌟', this.formatMessage('lpp.about.summary'))
@@ -817,11 +769,12 @@ declare let Scratch: ScratchContext
         if (!(fn instanceof LppValue || fn instanceof LppReference))
           throw new LppError('syntaxError')
         const func = ensureValue(fn)
+        const lppThread = thread as Thread
         if (!(func instanceof LppFunction)) throw new LppError('notCallable')
         const res = func.apply(
           fn instanceof LppReference
             ? fn.parent.deref() ?? new LppConstant(null)
-            : new LppConstant(null),
+            : lppThread.lpp?.unwind()?.self ?? new LppConstant(null),
           actualArgs
         )
         return this.asap(
@@ -1023,63 +976,20 @@ declare let Scratch: ScratchContext
             signature[i] = String(args[`ARG_${i}`])
           else throw new LppError('syntaxError')
         }
-        let context: LppContext
         const blocks = thread.target.blocks
-        const targetId = target.id
         const lppThread = thread as Thread
-        if (lppThread.lpp) {
-          context = lppThread.lpp
-        }
-        const fn = new LppFunction((self, args) => {
-          const target =
-            this.vm.runtime.getTargetById(targetId) ??
-            this.createDummyTarget(Target, blocks)
-          const id = block.inputs.SUBSTACK?.block
-          if (!id) return new LppReturn(new LppConstant(null))
-          if (!this.util)
-            throw new Error('lpp: util used before initialization')
-          const controller = new ThreadController(
-            this.vm.runtime as LppCompatibleRuntime,
-            this.util
+        return new Wrapper(
+          Metadata.attach(
+            new LppFunction(this.executeScratch.bind(this, Target)),
+            new Serialization.ScratchMetadata(
+              signature,
+              [blocks, block.id],
+              target.sprite.clones[0].id,
+              target.id,
+              lppThread.lpp
+            )
           )
-          const thread = controller.create(id, target)
-          return ImmediatePromise.sync(
-            new ImmediatePromise(resolve => {
-              thread.lpp = new LppFunctionContext(
-                context,
-                self ?? new LppConstant(null),
-                val => {
-                  resolve(val)
-                },
-                val => {
-                  resolve(val)
-                }
-              )
-              for (const [key, value] of signature.entries()) {
-                if (key < args.length) thread.lpp.closure.set(value, args[key])
-                else thread.lpp.closure.set(value, new LppConstant(null))
-              }
-              // TODO: no reserved variable names!
-              // builtin.Array.apply(null, args).then(value => {
-              //   thread.lpp.closure.set('arguments', value)
-              // })
-              // Call callback (if exists) when the thread is finished.
-              controller.wait(thread).then(() => {
-                ;(thread as Thread)?.lpp?.returnCallback(
-                  new LppReturn(new LppConstant(null))
-                )
-              })
-            })
-          )
-        })
-        Serialization.attachMetadata(
-          fn,
-          target.sprite.clones[0].id,
-          blocks,
-          block.id,
-          signature
         )
-        return new Wrapper(fn)
       } catch (e) {
         this.handleError(e)
       }
@@ -1315,15 +1225,18 @@ declare let Scratch: ScratchContext
       const { thread } = util
       this.util = util
       if (
-        (thread as Thread).isCompiled &&
         thread.stackClick &&
         thread.atStackTop() &&
         !thread.target.blocks.getBlock(thread.peekStack())?.next &&
         value !== undefined
       ) {
-        this.vm.runtime.visualReport(thread.peekStack(), value)
+        if ((thread as Thread).isCompiled) {
+          this.vm.runtime.visualReport(thread.peekStack(), value)
+        } else {
+          return value
+        }
       }
-      return value
+      return undefined
     }
 
     /**
@@ -1468,6 +1381,60 @@ declare let Scratch: ScratchContext
         ? new PromiseProxy<T>(res, postProcess, postProcess)
         : res
     }
+    private executeScratch(
+      Target: TargetConstructor,
+      ctx: LppHandle
+    ): LppResult | PromiseLike<LppResult> {
+      if (
+        Metadata.hasMetadata(ctx.fn) &&
+        ctx.fn.metadata instanceof Serialization.ScratchMetadata
+      ) {
+        const metadata = ctx.fn.metadata
+        let target: VM.Target | undefined
+        if (metadata.target)
+          target = this.vm.runtime.getTargetById(metadata.target)
+        if (!target) target = this.createDummyTarget(Target, metadata.blocks[0])
+        const id = metadata.blocks[0].getBlock(metadata.blocks[1])?.inputs
+          .SUBSTACK?.block
+        if (!id) return new LppReturn(new LppConstant(null))
+        if (!this.util) throw new Error('lpp: util used before initialization')
+        const controller = new ThreadController(
+          this.vm.runtime as LppCompatibleRuntime,
+          this.util
+        )
+        const thread = controller.create(id, target)
+        return ImmediatePromise.sync(
+          new ImmediatePromise(resolve => {
+            thread.lpp = new LppFunctionContext(
+              metadata.closure,
+              ctx.self ?? new LppConstant(null),
+              val => {
+                resolve(val)
+              },
+              val => {
+                resolve(val)
+              }
+            )
+            for (const [key, value] of metadata.signature.entries()) {
+              if (key < ctx.args.length)
+                thread.lpp.closure.set(value, ctx.args[key])
+              else thread.lpp.closure.set(value, new LppConstant(null))
+            }
+            // TODO: no reserved variable names!
+            // builtin.Array.apply(null, args).then(value => {
+            //   thread.lpp.closure.set('arguments', value)
+            // })
+            // Call callback (if exists) when the thread is finished.
+            controller.wait(thread).then(() => {
+              ;(thread as Thread)?.lpp?.returnCallback(
+                new LppReturn(new LppConstant(null))
+              )
+            })
+          })
+        )
+      }
+      return new LppReturn(new LppConstant(null))
+    }
     /**
      * Serialize function.
      * @param block Function block instance.
@@ -1476,16 +1443,10 @@ declare let Scratch: ScratchContext
      * @returns LppFunction result.
      */
     private static serializeFunction(
-      block: VM.Block | undefined,
-      blocks: VM.Blocks | undefined,
+      block: VM.Block,
+      blocks: VM.Blocks,
       signature: string[]
     ): LppValue {
-      if (!block || !blocks)
-        return ffi.fromObject({
-          signature,
-          script: {},
-          block: null
-        })
       const info: Serialization.SerializationInfo = {
         signature,
         script: Serialization.serializeBlock(blocks as Blocks, block),

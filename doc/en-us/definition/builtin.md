@@ -68,34 +68,38 @@ declare class Function {
 Here is the definition of `Promise` class.
 
 ```typescript
-interface Thenable<T> {
-  then(onFulfilled?: (value: T) => void, onRejected?: (reason: any) => void): void
-}
-interface PromiseLike<T> implements Thenable<T> {
-    /**
-     * Attaches callbacks for the resolution and/or rejection of the Promise.
-     * @param onFulfilled The callback to execute when the Promise is resolved.
-     * @param onRejected The callback to execute when the Promise is rejected.
-     * @returns A Promise for the completion of which ever callback is executed.
-     */
-    then<TResult1 = T, TResult2 = never>(onFulfilled?: (value: T) => TResult1 | PromiseLike<TResult1>, onRejected?: (reason: any) => TResult2 | PromiseLike<TResult2>): PromiseLike<TResult1 | TResult2>
+interface PromiseLike<T> {
+  /**
+   * Attaches callbacks for the resolution and/or rejection of the Promise.
+   * @param onFulfilled The callback to execute when the Promise is resolved.
+   * @param onRejected The callback to execute when the Promise is rejected.
+   * @returns A Promise for the completion of which ever callback is executed.
+   */
+  then<TResult1 = T, TResult2 = never>(
+    onFulfilled?: (value: T) => TResult1 | PromiseLike<TResult1>,
+    onRejected?: (reason: any) => TResult2 | PromiseLike<TResult2>
+  ): PromiseLike<TResult1 | TResult2>
 }
 /**
  * Recursively unwraps the "awaited type" of a type. Non-promise "thenables" should resolve to `never`. This emulates the behavior of `await`.
  */
-type Awaited<T> = T extends null ? T : // special case for `null | undefined` when not in `--strictNullChecks` mode
-  T extends object & { then(onfulfilled: infer F, ...args: infer _): any; } ? // `await` only unwraps object types with a callable `then`. Non-object types are not unwrapped
-    F extends ((value: infer V, ...args: infer _) => any) ? // if the argument to `then` is callable, extracts the first argument
-      Awaited<V> : // recursively unwrap the value
-      never : // the argument to `then` was not callable
-  T // non-object or non-thenable
+type Awaited<T> = T extends null
+  ? T // special case for `null | undefined` when not in `--strictNullChecks` mode
+  : T extends object & { then(onfulfilled: infer F, ...args: infer _): any } // `await` only unwraps object types with a callable `then`. Non-object types are not unwrapped
+    ? F extends (value: infer V, ...args: infer _) => any // if the argument to `then` is callable, extracts the first argument
+      ? Awaited<V> // recursively unwrap the value
+      : never // the argument to `then` was not callable
+    : T // non-object or non-thenable
 declare class Promise<T> implements PromiseLike<T> {
   /**
    * @constructor Construct a Promise instance.
    * @param executor Executor.
    */
   constructor(
-    executor: (resolve: (value: T | Thenable<T>) => void, reject: (reason?: any) => void) => void
+    executor: (
+      resolve: (value: T | PromiseLike<T>) => void,
+      reject: (reason?: any) => void
+    ) => void
   )
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -103,13 +107,18 @@ declare class Promise<T> implements PromiseLike<T> {
    * @param onRejected The callback to execute when the Promise is rejected.
    * @returns A Promise for the completion of which ever callback is executed.
    */
-  then<TResult1 = T, TResult2 = never>(onFulfilled?: ((value: T) => TResult1 | Thenable<TResult1>), onRejected?: (reason: any) => TResult2 | Thenable<TResult2>): Promise<TResult1 | TResult2>
+  then<TResult1 = T, TResult2 = never>(
+    onFulfilled?: (value: T) => TResult1 | PromiseLike<TResult1>,
+    onRejected?: (reason: any) => TResult2 | PromiseLike<TResult2>
+  ): Promise<TResult1 | TResult2>
   /**
    * Attaches a callback for only the rejection of the Promise.
    * @param onRejected The callback to execute when the Promise is rejected.
    * @returns A Promise for the completion of the callback.
    */
-  catch<TResult = never>(onRejected?: ((reason: any) => TResult | Thenable<TResult>)): Promise<T | TResult>;
+  catch<TResult = never>(
+    onRejected?: (reason: any) => TResult | PromiseLike<TResult>
+  ): Promise<T | TResult>
   /**
    * Creates a new rejected promise for the provided reason.
    * @param reason The reason the promise was rejected.
@@ -132,7 +141,7 @@ declare class Promise<T> implements PromiseLike<T> {
    * @param value A promise.
    * @returns A promise whose internal state matches the provided promise.
    */
-  static resolve<T>(value: T | Thenable<T>): Promise<Awaited<T>>;
+  static resolve<T>(value: T | PromiseLike<T>): Promise<Awaited<T>>
 }
 ```
 

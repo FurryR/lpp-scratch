@@ -887,6 +887,16 @@ export class LppArray extends LppValue {
     super()
   }
 }
+/**
+ * Handle for calling.
+ */
+export class LppHandle {
+  constructor(
+    public fn: LppFunction,
+    public self: LppValue,
+    public args: LppValue[]
+  ) {}
+}
 
 export class LppFunction extends LppObject {
   /**
@@ -896,36 +906,28 @@ export class LppFunction extends LppObject {
    * @returns Constructed function.
    */
   static native(
-    execute: (
-      self: LppValue,
-      args: LppValue[]
-    ) => LppResult | PromiseLike<LppResult>,
+    execute: (ctx: LppHandle) => LppResult | PromiseLike<LppResult>,
     prototype?: LppObject
   ): LppFunction {
     /**
      * Add a stack to exception.
      * @param exception Exception.
-     * @param fn Called function.
-     * @param self Self object.
-     * @param args Arguments.
+     * @param ctx Handle.
      * @returns Result.
      */
     function addNativeTraceback(
       exception: LppResult,
-      fn: LppFunction,
-      self: LppValue,
-      args: LppValue[]
+      ctx: LppHandle
     ): LppResult {
       if (exception instanceof LppException)
-        exception.pushStack(new LppTraceback.NativeFn(fn, self, args))
+        exception.pushStack(
+          new LppTraceback.NativeFn(ctx.fn, ctx.self, ctx.args)
+        )
       return exception
     }
-    const obj: LppFunction = new LppFunction((self, args) => {
-      return withValue(execute(self, args), value =>
-        addNativeTraceback(value, obj, self ?? new LppConstant(null), args)
-      )
+    return new LppFunction(ctx => {
+      return withValue(execute(ctx), value => addNativeTraceback(value, ctx))
     }, prototype)
-    return obj
   }
   /**
    * Get a value.
@@ -1005,7 +1007,7 @@ export class LppFunction extends LppObject {
    * @returns Return value.
    */
   apply(self: LppValue, args: LppValue[]): LppResult | PromiseLike<LppResult> {
-    return this.execute(self, args)
+    return this.caller(new LppHandle(this, self, args))
   }
   /**
    * Call function as a constructor.
@@ -1047,14 +1049,11 @@ export class LppFunction extends LppObject {
   /**
    * Construct a function object.
    * @warning Do not use this function directly unless you know what you are doing! Use LppFunction.native instead.
-   * @param execute Function to execute.
+   * @param caller Function to execute.
    * @param prototype Function prototype.
    */
   constructor(
-    private execute: (
-      self: LppValue,
-      args: LppValue[]
-    ) => LppResult | PromiseLike<LppResult>,
+    public caller: (ctx: LppHandle) => LppResult | PromiseLike<LppResult>,
     prototype: LppObject = new LppObject()
   ) {
     super(new Map(), undefined)
@@ -1071,28 +1070,28 @@ export class LppPromise extends LppObject {
   done(resolveFn?: LppFunction, rejectFn?: LppFunction): LppPromise {
     return LppPromise.generate((resolve, reject) => {
       this.pm.then(
-        resolveFn
-          ? value => {
-              if (value instanceof LppValue) {
-                const res = resolveFn.apply(this, [value])
-                return withValue(res, v =>
-                  processThenReturn(v, resolve, reject)
-                )
-              }
-              throw new Error('lpp: unknown result')
+        value => {
+          if (value instanceof LppValue) {
+            if (resolveFn) {
+              const res = resolveFn.apply(this, [value])
+              return withValue(res, v => processThenReturn(v, resolve, reject))
+            } else {
+              return processThenReturn(new LppReturn(value), resolve, reject)
             }
-          : undefined,
-        rejectFn
-          ? err => {
-              if (err instanceof LppValue) {
-                const res = rejectFn.apply(this, [err])
-                return withValue(res, v =>
-                  processThenReturn(v, resolve, reject)
-                )
-              }
-              throw err
+          }
+          throw new Error('lpp: unknown result')
+        },
+        err => {
+          if (err instanceof LppValue) {
+            if (rejectFn) {
+              const res = rejectFn.apply(this, [err])
+              return withValue(res, v => processThenReturn(v, resolve, reject))
+            } else {
+              return reject(err)
             }
-          : undefined // TODO: uncaughtException
+          }
+          throw err
+        }
       )
       return undefined
     })

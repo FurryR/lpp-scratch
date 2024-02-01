@@ -8,9 +8,10 @@ import {
 } from 'src/core'
 import { Dialog } from '.'
 import { BlocklyInstance } from '../blockly'
-import { hasMetadata } from '../serialization'
+import { TypeMetadata, hasMetadata } from '../metadata'
 import type { VM } from '../typing'
 import type * as ScratchBlocks from 'blockly/core'
+import { ScratchMetadata } from '../serialization'
 
 /**
  * Generate an inspector of specified object.
@@ -135,7 +136,7 @@ export function Inspector(
         )
       )
     }
-    if (metadata && !value.isTypehint) {
+    if (metadata && value.metadata instanceof ScratchMetadata) {
       const subelem = document.createElement('li')
       subelem.append(
         Dialog.Text(
@@ -148,15 +149,14 @@ export function Inspector(
       traceback.classList.add('lpp-code')
       if (
         Blockly &&
-        value.target &&
-        value.block &&
-        vm.runtime.getTargetById(value.target)
+        value.metadata.sprite &&
+        vm.runtime.getTargetById(value.metadata.sprite)
       ) {
         const workspace =
           Blockly.getMainWorkspace() as ScratchBlocks.WorkspaceSvg
         traceback.classList.add('lpp-traceback-stack-enabled')
-        const { target, block } = value
-        traceback.textContent = block
+        const { sprite, blocks } = value.metadata
+        traceback.textContent = blocks[1]
         traceback.title = formatMessage(
           'lpp.tooltip.button.scrollToBlockEnabled'
         )
@@ -165,15 +165,15 @@ export function Inspector(
             Blockly.DropDownDiv.getContentDiv().getElementsByClassName(
               'valueReportBox'
             )[0]
-          vm.setEditingTarget(target)
-          workspace.centerOnBlock(block, true)
+          vm.setEditingTarget(sprite)
+          workspace.centerOnBlock(blocks[1], true)
           if (box) {
             Blockly.DropDownDiv.hideWithoutAnimation()
             Blockly.DropDownDiv.clearContent()
             Blockly.DropDownDiv.getContentDiv().append(box)
             Blockly.DropDownDiv.showPositionedByBlock(
               workspace as unknown as ScratchBlocks.Field<unknown>,
-              workspace.getBlockById(block) as ScratchBlocks.BlockSvg
+              workspace.getBlockById(blocks[1]) as ScratchBlocks.BlockSvg
             )
           }
         })
@@ -223,7 +223,7 @@ export function Inspector(
       code = Dialog.Text(value.value.length === 0 ? '[]' : '[...]', 'lpp-code')
     } else if (value instanceof LppFunction) {
       code = Dialog.Text(
-        `f (${hasMetadata(value) ? value.signature.join(', ') : ''})`,
+        `f (${hasMetadata(value) && value.metadata instanceof TypeMetadata ? value.metadata.signature.join(', ') : ''})`,
         'lpp-code'
       )
       code.style.fontStyle = 'italic'
@@ -234,12 +234,12 @@ export function Inspector(
       Blockly &&
       value instanceof LppFunction &&
       hasMetadata(value) &&
-      value.target &&
-      value.block &&
-      vm.runtime.getTargetById(value.target)
+      value.metadata instanceof ScratchMetadata &&
+      value.metadata.sprite &&
+      vm.runtime.getTargetById(value.metadata.sprite)
     ) {
       const workspace = Blockly.getMainWorkspace() as ScratchBlocks.WorkspaceSvg
-      const { target, block } = value
+      const { sprite, blocks } = value.metadata
       code.title = formatMessage('lpp.tooltip.button.scrollToBlockEnabled')
       code.classList.add('lpp-traceback-stack-enabled')
       code.addEventListener('click', () => {
@@ -247,15 +247,15 @@ export function Inspector(
           Blockly.DropDownDiv.getContentDiv().getElementsByClassName(
             'valueReportBox'
           )[0]
-        vm.setEditingTarget(target)
-        workspace.centerOnBlock(block, true)
+        vm.setEditingTarget(sprite)
+        workspace.centerOnBlock(blocks[1], true)
         if (box) {
           Blockly.DropDownDiv.hideWithoutAnimation()
           Blockly.DropDownDiv.clearContent()
           Blockly.DropDownDiv.getContentDiv().append(box)
           Blockly.DropDownDiv.showPositionedByBlock(
             workspace as unknown as ScratchBlocks.Field<unknown>,
-            workspace.getBlockById(block) as ScratchBlocks.BlockSvg
+            workspace.getBlockById(blocks[1]) as ScratchBlocks.BlockSvg
           )
         }
       })

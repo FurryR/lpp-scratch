@@ -1,7 +1,7 @@
 import type * as OriginalVM from 'scratch-vm'
 import type { Message } from 'format-message'
 import type * as Core from 'src/core'
-import type * as Serialization from '../serialization'
+import type * as Metadata from '../metadata'
 import { Wrapper } from '../wrapper'
 
 /**
@@ -33,11 +33,10 @@ export interface ScratchContext {
  */
 export interface LppCompatibleRuntime extends VM.Runtime {
   lpp?: {
-    Serialization: typeof Serialization
-    Wrapper: typeof Wrapper
     Core: typeof Core
+    Metadata: typeof Metadata
+    Wrapper: typeof Wrapper
     version: string
-    global: typeof Core.global
   }
   requestUpdateMonitor?(state: Map<string, unknown>): boolean
   getMonitorState?(): Map<string, unknown>

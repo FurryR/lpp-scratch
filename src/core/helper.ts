@@ -190,14 +190,14 @@ export function processThenReturn(
   returnValue: LppResult,
   resolve: (v: LppValue) => void,
   reject: (reason: unknown) => void
-): undefined | PromiseLike<void> {
+): undefined | PromiseLike<undefined> {
   if (returnValue instanceof LppReturn) {
     const value = returnValue.value
     if (!(value instanceof LppConstant) || value.value !== null) {
       const then = ensureValue(value.get('then'))
       if (then instanceof LppFunction) {
         const res = then.apply(value, [
-          new LppFunction((_, args) => {
+          new LppFunction(({ args }) => {
             // resolve
             const res = processThenReturn(
               new LppReturn(args[0] ?? new LppConstant(null)),
@@ -206,7 +206,7 @@ export function processThenReturn(
             )
             return withValue(res, () => new LppReturn(new LppConstant(null)))
           }),
-          new LppFunction((_, args) => {
+          new LppFunction(({ args }) => {
             // reject
             reject(args[0] ?? new LppConstant(null))
             return new LppReturn(new LppConstant(null))
