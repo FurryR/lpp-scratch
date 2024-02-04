@@ -386,7 +386,7 @@ export function defineExtension(
       new Category(() => `🚧 ${formatMessage('lpp.category.construct')}`)
         .register(
           'constructLiteral',
-          Reporter.Square((Blockly, block) => () => {
+          Reporter.Round((Blockly, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.construct.literal'))
             block.appendDummyInput().appendField(
               new Blockly.FieldDropdown([
