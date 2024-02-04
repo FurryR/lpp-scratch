@@ -784,7 +784,7 @@ declare let Scratch: ScratchContext
             actualArgs.push(
               ...value.value.map(val => val ?? new LppConstant(null))
             )
-          if (value instanceof LppValue || value instanceof LppReference)
+          else if (value instanceof LppValue || value instanceof LppReference)
             actualArgs.push(asValue(value))
           else throw new LppError('syntaxError')
         }
@@ -844,7 +844,7 @@ declare let Scratch: ScratchContext
             actualArgs.push(
               ...value.value.map(val => val ?? new LppConstant(null))
             )
-          if (value instanceof LppValue || value instanceof LppReference)
+          else if (value instanceof LppValue || value instanceof LppReference)
             actualArgs.push(asValue(value))
           else throw new LppError('syntaxError')
         }
