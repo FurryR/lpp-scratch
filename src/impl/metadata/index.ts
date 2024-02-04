@@ -1,4 +1,4 @@
-import type { LppFunction, LppObject } from 'src/core'
+import type { LppFunction, LppObject } from '../../core'
 
 export interface Metadata {
   metadata: unknown

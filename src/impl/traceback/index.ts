@@ -3,7 +3,7 @@
  */
 
 import type { VM } from '../typing'
-import { LppException } from 'src/core'
+import { LppException } from '../../core'
 import { BlocklyInstance } from '../blockly'
 import * as Dialog from './dialog'
 import type * as ScratchBlocks from 'blockly/core'

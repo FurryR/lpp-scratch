@@ -1,6 +1,6 @@
 import type * as OriginalVM from 'scratch-vm'
 import type { Message } from 'format-message'
-import type * as Core from 'src/core'
+import type * as Core from '../../core'
 import type * as Metadata from '../metadata'
 import { Wrapper } from '../wrapper'
 

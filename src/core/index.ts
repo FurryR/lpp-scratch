@@ -1,8 +1,10 @@
 /**
  * Lpp core (standard) implementation.
  */
-export * from './global'
-export * from './context'
+
+import InternalGlobal from './global'
 export * from './type'
-export { ensureValue, asBoolean, isPromise, withValue, raise } from './helper'
+export * from './context'
+export const Global = InternalGlobal
+export { asValue, asBoolean, isPromise, async, raise } from './helper'
 export * as ffi from './ffi'

@@ -1,4 +1,4 @@
-import { LppContext } from 'src/core'
+import { LppContext } from '../core'
 import { TypeMetadata } from './metadata'
 
 export interface SerializationInfo {

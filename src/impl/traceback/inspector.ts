@@ -5,13 +5,14 @@ import {
   LppFunction,
   LppConstant,
   Global
-} from 'src/core'
+} from '../../core'
 import { Dialog } from '.'
 import { BlocklyInstance } from '../blockly'
 import { TypeMetadata, hasMetadata } from '../metadata'
 import type { VM } from '../typing'
 import type * as ScratchBlocks from 'blockly/core'
 import { ScratchMetadata } from '../serialization'
+import { LppBoundArg } from '../boundarg'
 
 /**
  * Generate an inspector of specified object.
@@ -25,7 +26,7 @@ export function Inspector(
   Blockly: BlocklyInstance | undefined,
   vm: VM,
   formatMessage: (id: string) => string,
-  value: LppValue
+  value: LppValue | LppBoundArg
 ): HTMLSpanElement {
   /**
    * Generate an extend icon.
@@ -66,11 +67,11 @@ export function Inspector(
    * @returns List element.
    */
   function objView(
-    value: LppArray | LppObject | LppFunction
+    value: LppArray | LppObject | LppFunction | LppBoundArg
   ): HTMLUListElement {
     function keyValue(
       index: string,
-      value: LppValue,
+      value: LppValue | LppBoundArg,
       isArray: boolean
     ): HTMLLIElement {
       const subelem = document.createElement('li')
@@ -94,7 +95,9 @@ export function Inspector(
       subelem.append(Inspector(Blockly, vm, formatMessage, value))
       return subelem
     }
-    const metadata = value instanceof LppFunction && hasMetadata(value)
+    const metadata =
+      (value instanceof LppObject || value instanceof LppFunction) &&
+      hasMetadata(value)
     const div = document.createElement('ul')
     div.classList.add('lpp-list')
     for (const [index, v] of value.value.entries()) {
@@ -106,7 +109,7 @@ export function Inspector(
           keyValue(
             String(index),
             v ?? new LppConstant(null),
-            value instanceof LppArray
+            value instanceof LppArray || value instanceof LppBoundArg
           )
         )
     }
@@ -202,7 +205,8 @@ export function Inspector(
   } else if (
     value instanceof LppArray ||
     value instanceof LppObject ||
-    value instanceof LppFunction
+    value instanceof LppFunction ||
+    value instanceof LppBoundArg
   ) {
     let v: HTMLUListElement | undefined
     const btn = ExtendIcon(
@@ -227,12 +231,14 @@ export function Inspector(
         'lpp-code'
       )
       code.style.fontStyle = 'italic'
-    } else {
+    } else if (value instanceof LppObject) {
       code = Dialog.Text(value.value.size === 0 ? '{}' : '{...}', 'lpp-code')
+    } else {
+      code = Dialog.Text(value.value.length === 0 ? '()' : '(...)', 'lpp-code')
     }
     if (
       Blockly &&
-      value instanceof LppFunction &&
+      (value instanceof LppFunction || value instanceof LppObject) &&
       hasMetadata(value) &&
       value.metadata instanceof ScratchMetadata &&
       value.metadata.sprite &&

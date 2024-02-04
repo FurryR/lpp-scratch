@@ -2,7 +2,7 @@
 // Reference (https://promisesaplus.com/):
 // 2.2.4 onFulfilled or onRejected must not be called until the execution context stack contains only platform code. [3.1].
 
-import { isPromise } from 'src/core'
+import { isPromise } from '../core'
 class Resolved<T> {
   constructor(public value: T) {}
 }

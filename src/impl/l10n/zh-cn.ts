@@ -29,7 +29,7 @@ export default {
   'lpp.error.useOutsideContext.detail': '请首先使用作用域积木来创建作用域。',
   'lpp.error.syntaxError.summary': '积木语法错误。',
   'lpp.error.syntaxError.detail':
-    '您错误地使用了积木。请注意 lpp 不允许（在下标访问以外的情况下）直接使用 Scratch 字面量。',
+    '您错误地使用了积木。请重新检查是否有直接使用 Scratch 字面量或错误使用展开运算符的情况。',
   'lpp.error.accessOfNull.summary': '访问了 null 的成员。',
   'lpp.error.accessOfNull.detail': '请在使用对象前检查对象是否为空。',
   'lpp.error.assignOfConstant.summary': '对常量进行了赋值操作。',

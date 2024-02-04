@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  name: 'secure-vm',
+  name: 'lpp',
   entry: ['src/index.ts'],
   target: ['esnext'],
   format: ['iife'],

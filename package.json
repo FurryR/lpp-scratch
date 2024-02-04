@@ -21,6 +21,15 @@
     "url": "git+https://github.com/FurryR/lpp-scratch.git"
   },
   "author": "FurryR",
+  "developers": [
+    "🐺 @FurryR https://github.com/FurryR - Developer, Test, Translation, Documentation",
+    "🤔 @SimonShiki https://github.com/SimonShiki - Test, Technical support",
+    "😄 @Nights https://github.com/Nightre - Technical support",
+    "🔤 @CST1229 https://github.com/CST1229 - Technical support",
+    "⭐ @DilemmaGX https://github.com/DilemmaGX - Icon artist (legacy)",
+    "🍭 @TangDo158 https://github.com/TangDo158 - Icon artist (new)",
+    "🐺 @VeroFess https://github.com/VeroFess - Technical support"
+  ],
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/FurryR/lpp-scratch/issues"

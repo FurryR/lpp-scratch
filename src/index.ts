@@ -15,8 +15,7 @@ import {
 import icon from './impl/asset/icon'
 import type * as ScratchBlocks from 'blockly/core'
 import {
-  global,
-  ensureValue,
+  asValue,
   LppError,
   LppValue,
   LppReference,
@@ -31,8 +30,12 @@ import {
   LppResult,
   Global,
   ffi,
-  LppHandle
+  LppHandle,
+  isPromise,
+  async,
+  raise
 } from './core'
+import { version, developers } from '../package.json'
 import * as Core from './core'
 import locale from './impl/l10n'
 import { Dialog, Inspector, warnError, warnException } from './impl/traceback'
@@ -43,14 +46,13 @@ import * as Metadata from './impl/metadata'
 import * as Serialization from './impl/serialization'
 import { Wrapper } from './impl/wrapper'
 import { attachType } from './impl/typehint'
-import { isPromise, raise, withValue } from './core/helper'
 import { ImmediatePromise, PromiseProxy } from './impl/promise'
 import { ThreadController } from './impl/thread'
+import { LppBoundArg } from './impl/boundarg'
 
 declare let Scratch: ScratchContext
 ;(function (Scratch: ScratchContext) {
   const color = '#808080'
-  const lppVersion = 'Daily build'
   // Translations.
 
   if (Scratch.extensions.unsandboxed === false) {
@@ -228,10 +230,14 @@ declare let Scratch: ScratchContext
         const unwrappedValue = Wrapper.unwrap(value)
         if (
           (unwrappedValue instanceof LppValue ||
-            unwrappedValue instanceof LppReference) &&
+            unwrappedValue instanceof LppReference ||
+            unwrappedValue instanceof LppBoundArg) &&
           this.Blockly
         ) {
-          const actualValue = ensureValue(unwrappedValue)
+          const actualValue =
+            unwrappedValue instanceof LppBoundArg
+              ? unwrappedValue
+              : asValue(unwrappedValue)
           Dialog.show(
             this.Blockly as BlocklyInstance,
             blockId,
@@ -308,7 +314,7 @@ declare let Scratch: ScratchContext
         const monitorMap: Map<
           string,
           {
-            value?: LppValue
+            value?: LppValue | LppBoundArg
             mode: string
           }
         > = new Map()
@@ -329,9 +335,13 @@ declare let Scratch: ScratchContext
               const unwrappedValue = Wrapper.unwrap(monitorValue)
               if (
                 unwrappedValue instanceof LppValue ||
-                unwrappedValue instanceof LppReference
+                unwrappedValue instanceof LppReference ||
+                unwrappedValue instanceof LppBoundArg
               ) {
-                const actualValue = ensureValue(unwrappedValue)
+                const actualValue =
+                  unwrappedValue instanceof LppBoundArg
+                    ? unwrappedValue
+                    : asValue(unwrappedValue)
                 if (!cache || cache.value !== actualValue) {
                   requestAnimationFrame(() => {
                     const monitor = getMonitorById(id)
@@ -378,16 +388,21 @@ declare let Scratch: ScratchContext
       // Patch Function.
       Global.Function.set(
         'serialize',
-        LppFunction.native(({ self, args }) => {
+        LppFunction.native(({ args }) => {
           const fn = args[0]
           if (
-            self !== Global.Function ||
             !fn ||
             !(fn instanceof LppFunction) ||
             !Metadata.hasMetadata(fn) ||
             !(fn.metadata instanceof Serialization.ScratchMetadata)
           ) {
-            return raise(Global.IllegalInvocationError.construct([]))
+            return async(function* () {
+              return raise(
+                yield (Global.IllegalInvocationError as LppFunction).construct(
+                  []
+                )
+              )
+            })
           }
           const v = fn.metadata.blocks[0]?.getBlock(fn.metadata.blocks[1])
           if (!v) throw new Error('lpp: serialize blockId invalid')
@@ -402,10 +417,7 @@ declare let Scratch: ScratchContext
       )
       Global.Function.set(
         'deserialize',
-        LppFunction.native(({ self, args }) => {
-          if (self !== Global.Function) {
-            return raise(Global.IllegalInvocationError.construct([]))
-          }
+        LppFunction.native(({ args }) => {
           const val: unknown = ffi.toObject(args[0] ?? new LppConstant(null))
           if (Serialization.Validator.isInfo(val)) {
             const Blocks = runtime.flyoutBlocks.constructor as BlocksConstructor
@@ -427,9 +439,13 @@ declare let Scratch: ScratchContext
               )
             )
           }
-          return raise(
-            Global.SyntaxError.construct([new LppConstant('Invalid value')])
-          )
+          return async(function* () {
+            return raise(
+              yield (Global.SyntaxError as LppFunction).construct([
+                new LppConstant('Invalid value')
+              ])
+            )
+          })
         })
       )
       attachType()
@@ -438,9 +454,9 @@ declare let Scratch: ScratchContext
         Core,
         Metadata: Metadata,
         Wrapper,
-        version: lppVersion
+        version
       }
-      console.groupCollapsed('💫 lpp', lppVersion)
+      console.groupCollapsed('💫 lpp', version)
       console.log('🌟', this.formatMessage('lpp.about.summary'))
       console.log(
         '🤖',
@@ -453,18 +469,9 @@ declare let Scratch: ScratchContext
         '-> https://afdian.net/a/FurryR'
       )
       console.group('👾', this.formatMessage('lpp.about.staff.1'))
-      console.log(
-        '🐺 @FurryR https://github.com/FurryR - Developer, Test, Translation, Documentation'
-      )
-      console.log(
-        '🤔 @SimonShiki https://github.com/SimonShiki - Test, Technical support'
-      )
-      console.log('😄 @Nights https://github.com/Nightre - Technical support')
-      console.log('🔤 @CST1229 https://github.com/CST1229 - Technical support')
-      console.log('⭐ @DilemmaGX https://github.com/DilemmaGX - Icon artist')
-      console.log(
-        '🐺 @VeroFess https://github.com/VeroFess - Technical support'
-      )
+      for (const v of developers) {
+        console.log(v)
+      }
       console.log('🥰', this.formatMessage('lpp.about.staff.2'))
       console.groupEnd()
       console.groupEnd()
@@ -517,7 +524,9 @@ declare let Scratch: ScratchContext
       util: VM.BlockUtility
     ): Wrapper<LppValue> {
       this.util = util
-      const instance = global.get(args.value)
+      const instance = (Global as Record<string, LppValue | undefined>)[
+        args.value
+      ]
       if (instance) {
         return new Wrapper(instance)
       }
@@ -598,7 +607,7 @@ declare let Scratch: ScratchContext
                 rhs instanceof LppValue ||
                 rhs instanceof LppReference
               ) {
-                const n = ensureValue(rhs)
+                const n = asValue(rhs)
                 if (n instanceof LppConstant && n.value !== null) {
                   return lhs.get(n.toString())
                 }
@@ -632,11 +641,11 @@ declare let Scratch: ScratchContext
               case '|':
               case '^':
               case 'instanceof': {
-                return lhs.calc(args.op, ensureValue(rhs))
+                return lhs.calc(args.op, asValue(rhs))
               }
               case 'in': {
-                const left = ensureValue(lhs)
-                const right = ensureValue(rhs)
+                const left = asValue(lhs)
+                const right = asValue(rhs)
                 if (!(left instanceof LppConstant && left.value !== null))
                   throw new LppError('invalidIndex')
                 return new LppConstant(right.has(left.toString()))
@@ -663,13 +672,13 @@ declare let Scratch: ScratchContext
       util: VM.BlockUtility
     ):
       | PromiseProxy<Wrapper<LppValue>>
-      | Wrapper<LppValue>
-      | Wrapper<LppReference> {
+      | Wrapper<LppValue | LppReference | LppBoundArg> {
       /**
        * ['+', '+'],
          ['-', '-'],
          ['!', '!'],
          ['~', '~'],
+         ['...', '...'],
          ['delete', 'delete'],
          ['await', 'await'],
          ['yield', 'yield'],
@@ -689,8 +698,15 @@ declare let Scratch: ScratchContext
             case 'delete': {
               return value.calc(args.op)
             }
+            case '...': {
+              // TODO: Iterable (generator) support
+              if (!(value instanceof LppArray)) {
+                throw new LppError('syntaxError')
+              }
+              return new LppBoundArg(value.value)
+            }
             // case 'await': {
-            //   const v = ensureValue(value)
+            //   const v = asValue(value)
             //   const then = v.get('then')
             //   const error = v.get('catch')
             //   const thread = util.thread
@@ -764,25 +780,34 @@ declare let Scratch: ScratchContext
         const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
           const value = Wrapper.unwrap(args[`ARG_${i}`])
+          if (value instanceof LppBoundArg)
+            actualArgs.push(
+              ...value.value.map(val => val ?? new LppConstant(null))
+            )
           if (value instanceof LppValue || value instanceof LppReference)
-            actualArgs[i] = ensureValue(value)
+            actualArgs.push(asValue(value))
           else throw new LppError('syntaxError')
         }
         if (!(fn instanceof LppValue || fn instanceof LppReference))
           throw new LppError('syntaxError')
-        const func = ensureValue(fn)
+        const func = asValue(fn)
         const lppThread = thread as Thread
         if (!(func instanceof LppFunction)) throw new LppError('notCallable')
-        const res = func.apply(
-          fn instanceof LppReference
-            ? fn.parent.deref() ?? new LppConstant(null)
-            : lppThread.lpp?.unwind()?.self ?? new LppConstant(null),
-          actualArgs
-        )
         return this.asap(
-          withValue(
-            res,
-            result => new Wrapper(this.processApplyValue(result, thread))
+          async(
+            function* (this: LppExtension) {
+              return new Wrapper(
+                this.processApplyValue(
+                  yield func.apply(
+                    fn instanceof LppReference
+                      ? fn.parent.deref() ?? new LppConstant(null)
+                      : lppThread.lpp?.unwind()?.self ?? new LppConstant(null),
+                    actualArgs
+                  ),
+                  thread
+                )
+              )
+            }.bind(this)
           ),
           thread
         )
@@ -815,19 +840,26 @@ declare let Scratch: ScratchContext
         const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
           const value = Wrapper.unwrap(args[`ARG_${i}`])
+          if (value instanceof LppBoundArg)
+            actualArgs.push(
+              ...value.value.map(val => val ?? new LppConstant(null))
+            )
           if (value instanceof LppValue || value instanceof LppReference)
-            actualArgs[i] = ensureValue(value)
+            actualArgs.push(asValue(value))
           else throw new LppError('syntaxError')
         }
         if (!(fn instanceof LppValue || fn instanceof LppReference))
           throw new LppError('syntaxError')
-        fn = ensureValue(fn)
-        if (!(fn instanceof LppFunction)) throw new LppError('notCallable')
-        const res = fn.construct(actualArgs)
+        fn = asValue(fn)
         return this.asap(
-          withValue(
-            res,
-            result => new Wrapper(this.processApplyValue(result, thread))
+          async(
+            function* (this: LppExtension) {
+              if (!(fn instanceof LppFunction))
+                throw new LppError('notCallable')
+              return new Wrapper(
+                this.processApplyValue(yield fn.construct(actualArgs), thread)
+              )
+            }.bind(this)
           ),
           thread
         )
@@ -905,9 +937,10 @@ declare let Scratch: ScratchContext
         const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
           const value = Wrapper.unwrap(args[`ARG_${i}`])
-          if (!(value instanceof LppValue || value instanceof LppReference))
-            throw new LppError('syntaxError')
-          arr.value.push(ensureValue(value))
+          if (value instanceof LppBoundArg) arr.value.push(...value.value)
+          else if (value instanceof LppValue || value instanceof LppReference)
+            arr.value.push(asValue(value))
+          else throw new LppError('syntaxError')
         }
         return new Wrapper(arr)
       } catch (e) {
@@ -945,7 +978,7 @@ declare let Scratch: ScratchContext
           } else throw new LppError('invalidIndex')
           if (!(value instanceof LppValue || value instanceof LppReference))
             throw new LppError('syntaxError')
-          obj.set(key as string, ensureValue(value))
+          obj.set(key as string, asValue(value))
         }
         return new Wrapper(obj)
       } catch (e) {
@@ -1028,7 +1061,7 @@ declare let Scratch: ScratchContext
         value = Wrapper.unwrap(value)
         if (!(value instanceof LppValue || value instanceof LppReference))
           throw new LppError('syntaxError')
-        const val = ensureValue(value)
+        const val = asValue(value)
         const lppThread = thread as Thread
         if (lppThread.lpp) {
           const ctx = lppThread.lpp.unwind()
@@ -1054,7 +1087,7 @@ declare let Scratch: ScratchContext
         value = Wrapper.unwrap(value)
         if (!(value instanceof LppValue || value instanceof LppReference))
           throw new LppError('syntaxError')
-        const val = ensureValue(value)
+        const val = asValue(value)
         const result = new LppException(val)
         const lppThread = thread as Thread
         result.pushStack(
@@ -1171,11 +1204,9 @@ declare let Scratch: ScratchContext
                     resolve(undefined)
                     return
                   }
-                  const GlobalError = global.get('Error')
-                  if (!(GlobalError instanceof LppFunction))
-                    throw new Error('lpp: not implemented')
                   const error = value.value
-                  if (error.instanceof(GlobalError)) {
+                  // Optimize: only set stack when the error catched.
+                  if (error.instanceof(Global.Error as LppFunction)) {
                     const traceback = new LppArray(
                       value.stack.map(v => new LppConstant(v.toString()))
                     )

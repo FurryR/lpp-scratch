@@ -1,4 +1,6 @@
-import { LppConstant, LppValue, LppReference, LppFunction } from './type'
+import type { LppFunction } from './type'
+import { LppValue, LppConstant, LppReference } from './type'
+
 /**
  * LppFunction return value.
  */

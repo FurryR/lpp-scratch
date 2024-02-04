@@ -337,7 +337,7 @@ export function defineExtension(
       new Category(() => `#️⃣ ${formatMessage('lpp.category.builtin')}`)
         .register(
           'builtinType',
-          Reporter.Square((Blockly, block) => () => {
+          Reporter.Round((Blockly, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.builtin.type'))
             block.appendDummyInput().appendField(
               new Blockly.FieldDropdown([
@@ -355,7 +355,7 @@ export function defineExtension(
         )
         .register(
           'builtinError',
-          Reporter.Square((Blockly, block) => () => {
+          Reporter.Round((Blockly, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.builtin.error'))
             block.appendDummyInput().appendField(
               new Blockly.FieldDropdown([
@@ -369,7 +369,7 @@ export function defineExtension(
         )
         .register(
           'builtinUtility',
-          Reporter.Square((Blockly, block) => () => {
+          Reporter.Round((Blockly, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.builtin.error'))
             block.appendDummyInput().appendField(
               new Blockly.FieldDropdown([
@@ -624,6 +624,7 @@ export function defineExtension(
                 ['-', '-'],
                 ['!', '!'],
                 ['~', '~'],
+                ['...', '...'],
                 ['delete', 'delete'],
                 ['await', 'await'],
                 ['yield', 'yield'],
@@ -733,7 +734,7 @@ export function defineExtension(
         )
         .register(
           'self',
-          Reporter.Square((_, block) => () => {
+          Reporter.Round((_, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.operator.self'))
             block.setCheckboxInFlyout(false)
             Input.Text(block, 'LABEL', formatMessage('lpp.block.operator.self'))
@@ -741,7 +742,7 @@ export function defineExtension(
         )
         .register(
           'var',
-          Reporter.Square((_, block) => () => {
+          Reporter.Round((_, block) => () => {
             block.setTooltip(formatMessage('lpp.tooltip.operator.var'))
             Input.Text(block, 'LABEL', formatMessage('lpp.block.operator.var'))
             Input.String(block, 'name', '🐺')

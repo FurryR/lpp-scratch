@@ -34,7 +34,7 @@ export default {
     'Please create a lpp context use "scope" block first.',
   'lpp.error.syntaxError.summary': 'Syntax error.',
   'lpp.error.syntaxError.detail':
-    "You used the block incorrectly. Please note that lpp doesn't allow direct usages of Scratch literals (index access is a exception).",
+    'You used the block incorrectly. Please recheck if you used Scratch literals directly or misused expand operator.',
   'lpp.error.accessOfNull.summary': 'Invalid access of null.',
   'lpp.error.accessOfNull.detail': 'Please validate the object before you use.',
   'lpp.error.assignOfConstant.summary':
