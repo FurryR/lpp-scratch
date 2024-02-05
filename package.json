@@ -13,7 +13,7 @@
     "lint:type": "tsc --noEmit -p ./tsconfig.json",
     "fix": "eslint ./src --fix",
     "build": "tsup --minify",
-    "dev": "tsup",
+    "dev": "tsup && http-server ./dist -p 8080 --cors",
     "format": "prettier ./src ./doc *.md -c -w"
   },
   "repository": {
@@ -47,6 +47,7 @@
     "blockly": "^10.3.0",
     "eslint": "^8.56.0",
     "format-message": "^6.2.4",
+    "http-server": "^14.1.1",
     "pre-commit": "^1.2.2",
     "prettier": "^3.2.1",
     "tsup": "^8.0.1",
