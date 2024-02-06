@@ -14,7 +14,8 @@
     "fix": "eslint ./src --fix",
     "build": "tsup --minify",
     "dev": "tsup && http-server ./dist -p 8080 --cors",
-    "format": "prettier ./src ./doc *.md -c -w"
+    "format": "prettier ./src ./doc *.md -c -w",
+    "lint:format": "prettier ./src ./doc *.md -c"
   },
   "repository": {
     "type": "git",
@@ -35,9 +36,9 @@
     "url": "https://github.com/FurryR/lpp-scratch/issues"
   },
   "pre-commit": [
-    "format",
     "lint",
-    "lint:type"
+    "lint:type",
+    "lint:format"
   ],
   "homepage": "https://github.com/FurryR/lpp-scratch#readme",
   "devDependencies": {
