@@ -13,7 +13,8 @@
     "lint:type": "tsc --noEmit -p ./tsconfig.json",
     "fix": "eslint ./src --fix",
     "build": "tsup --minify",
-    "dev": "tsup && http-server ./dist -p 8080 --cors",
+    "start": "tsup && http-server ./dist -p 8080 --cors",
+    "dev": "tsup",
     "format": "prettier ./src ./doc *.md -c -w",
     "lint:format": "prettier ./src ./doc *.md -c"
   },
