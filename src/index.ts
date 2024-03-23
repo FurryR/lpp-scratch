@@ -1,6 +1,6 @@
 /**
  * Copyright (c) 2024 凌.
- * This program is licensed under the MIT license.
+ * This program is licensed under the LGPL-3.0 license.
  */
 
 import {

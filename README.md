@@ -144,7 +144,7 @@
 
 <div align="center">
 
-_`This project is licensed under the MIT license.`_
+_`This project is licensed under the LGPL-3.0 license.`_
 
 ❤️
 
