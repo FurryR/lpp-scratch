@@ -227,7 +227,7 @@ export class ImmediatePromise<T> implements PromiseLike<T> {
     return new ImmediatePromise<Result>((resolve, reject) => {
       let index = 0
       let completed = 0
-      const result: Partial<Result> = {}
+      const result: Result = {} as unknown as Result
       let performCheck = false
       for (const v of values) {
         const current = index++
@@ -327,7 +327,7 @@ export class ImmediatePromise<T> implements PromiseLike<T> {
     return new ImmediatePromise<Result>(resolve => {
       let index = 0
       let completed = 0
-      const result: Partial<Result> = {}
+      const result: Result = {} as unknown as Result
       let performCheck = false
       for (const v of values) {
         const current = index++

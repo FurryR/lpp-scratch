@@ -1,29 +1,6 @@
 import { Block, BlocklyInstance } from './typing'
 
 /**
- * getInfo() metadata map.
- */
-interface MetadataMap {
-  label: {
-    text: string
-  }
-  reporter: {
-    opcode: string
-    text: string
-    arguments: Record<string, never>
-  }
-  button: {
-    func: string
-    text: string
-  }
-}
-/**
- * Metadata for Scratch of a block.
- */
-export type BlockMetadata<T extends keyof MetadataMap = keyof MetadataMap> = {
-  blockType: T
-} & MetadataMap[T]
-/**
  * Generator function result for Blockly block.
  */
 export interface BlockMap {
@@ -50,20 +27,20 @@ export interface BlockDescriptor {
  */
 export interface ExtensionBlock {
   inject(Blockly: BlocklyInstance, extension: Extension): void
-  export(): BlockMetadata[]
+  export(): Scratch.Block[]
 }
 /**
  * Button (for documentation, etc.)
  */
 export class Button implements ExtensionBlock {
   inject() {}
-  export(): BlockMetadata[] {
+  export(): Scratch.ButtonBlock[] {
     return [
       {
-        func: this.id,
+        func: this.id, // Turbowarp extension
         blockType: 'button',
         text: this.lazyText()
-      }
+      } as Scratch.ButtonBlock
     ]
   }
   /**
@@ -136,7 +113,7 @@ export class Category {
    * Export blocks as Scratch metadata.
    * @returns Scratch metadata.
    */
-  export(): BlockMetadata[] {
+  export(): Scratch.Block[] {
     return [
       {
         blockType: 'label',
@@ -149,7 +126,7 @@ export class Category {
         text: '',
         arguments: {}
       }))
-    ) as BlockMetadata[]
+    ) as Scratch.Block[]
   }
   /**
    * Construct a category.
@@ -186,7 +163,7 @@ export class Extension {
    * Export blocks as Scratch metadata.
    * @returns Scratch metadata.
    */
-  export(): BlockMetadata[] {
+  export(): Scratch.Block[] {
     return this.blocks.map(v => v.export()).flat(1)
   }
   /**

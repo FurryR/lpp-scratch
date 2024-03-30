@@ -2,8 +2,7 @@
   "name": "lpp-scratch",
   "version": "1.0.0",
   "description": "lpp is a high-level programming language developed by @FurryR.",
-  "main": "dist/main.js",
-  "types": "./dist/index.d.ts",
+  "main": "dist/index.global.js",
   "directories": {
     "doc": "doc"
   },
@@ -12,11 +11,11 @@
     "lint": "eslint ./src",
     "lint:type": "tsc --noEmit -p ./tsconfig.json",
     "fix": "eslint ./src --fix",
-    "build": "tsup --minify",
     "start": "tsup && http-server ./dist -p 8080 --cors",
-    "dev": "tsup",
-    "format": "prettier ./src ./doc *.md -c -w",
-    "lint:format": "prettier ./src ./doc *.md -c"
+    "build": "tsup",
+    "build:turbowarp": "tsup && (npx prettier --config turbowarp/.prettierrc --parser acorn < dist/index.global.js) > dist/index.global.formatted.js",
+    "format": "prettier ./src -c -w",
+    "lint:format": "prettier ./src -c"
   },
   "repository": {
     "type": "git",

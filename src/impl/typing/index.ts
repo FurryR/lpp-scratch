@@ -1,33 +1,8 @@
 import type * as OriginalVM from 'scratch-vm'
-import type { Message } from 'format-message'
 import type * as Core from '../../core'
 import type * as Metadata from '../metadata'
 import { Wrapper } from '../wrapper'
 
-/**
- * Definition of Scratch extension.
- */
-export interface ScratchExtension {
-  getInfo(): object
-}
-/**
- * Definition of Scratch.translate().
- */
-export interface TranslateFn {
-  (message: Message, args?: object | undefined): string
-  setup(newTranslations: object | Message | null): void
-}
-/**
- * Definition of Scratch object.
- */
-export interface ScratchContext {
-  extensions: {
-    register(ext: ScratchExtension): void
-    unsandboxed: boolean
-  }
-  translate: TranslateFn
-  vm?: VM
-}
 /**
  * Definition of runtime (with compiler support, for Turbowarp).
  */

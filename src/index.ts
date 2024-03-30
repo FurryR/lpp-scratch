@@ -9,7 +9,6 @@ import {
   LppCompatibleRuntime,
   Thread,
   VM,
-  ScratchContext,
   TargetConstructor
 } from './impl/typing'
 import icon from './impl/asset/icon'
@@ -49,9 +48,7 @@ import { attachType } from './impl/typehint'
 import { ImmediatePromise, PromiseProxy } from './impl/promise'
 import { ThreadController } from './impl/thread'
 import { LppBoundArg } from './impl/boundarg'
-
-declare let Scratch: ScratchContext
-;(function (Scratch: ScratchContext) {
+;(function (Scratch) {
   const color = '#808080'
   // Translations.
 
@@ -76,7 +73,7 @@ declare let Scratch: ScratchContext
   /**
    * The extension class.
    */
-  class LppExtension {
+  class LppExtension implements Scratch.Extension {
     /**
      * Virtual machine instance.
      */
@@ -493,7 +490,7 @@ declare let Scratch: ScratchContext
      * Get extension info.
      * @returns Extension info.
      */
-    getInfo() {
+    getInfo(): Scratch.Info {
       if (this.Blockly) this.extension.inject(this.Blockly)
       return {
         id: 'lpp',
@@ -516,7 +513,7 @@ declare let Scratch: ScratchContext
     }
     /**
      * Builtin types.
-     * @param param0 Function name.
+     * @param args Function name.
      * @returns Class.
      */
     builtinType(
@@ -1066,7 +1063,7 @@ declare let Scratch: ScratchContext
         if (lppThread.lpp) {
           const ctx = lppThread.lpp.unwind()
           if (ctx instanceof LppFunctionContext) {
-            ctx.returnCallback(new LppReturn(val))
+            ctx.resolve(new LppReturn(val))
             return thread.stopThisScript()
           }
         }
@@ -1098,7 +1095,7 @@ declare let Scratch: ScratchContext
           )
         )
         if (lppThread.lpp) {
-          lppThread.lpp.exceptionCallback(result)
+          lppThread.lpp.resolve(result)
           return thread.stopThisScript()
         }
         this.handleException(result)
@@ -1137,17 +1134,9 @@ declare let Scratch: ScratchContext
                 parentThread.lpp ?? undefined,
                 value => {
                   if (parentThread.lpp) {
-                    parentThread.lpp.returnCallback(value)
-                    return scopeThread.stopThisScript()
+                    parentThread.lpp.resolve(value)
+                    // return scopeThread.stopThisScript()
                   } else throw new LppError('useOutsideFunction')
-                },
-                value => {
-                  if (parentThread.lpp) {
-                    // interrupt the thread.
-                    parentThread.lpp.exceptionCallback(value)
-                    return thread.stopThisScript()
-                  }
-                  this.handleException(value)
                 }
               )
               resolve(controller.wait(scopeThread).then(() => undefined))
@@ -1193,47 +1182,44 @@ declare let Scratch: ScratchContext
               tryThread.lpp = new LppContext(
                 parentThread.lpp ?? undefined,
                 value => {
-                  if (parentThread.lpp) {
-                    parentThread.lpp.returnCallback(value)
-                    return tryThread.stopThisScript()
-                  } else throw new LppError('useOutsideFunction')
-                },
-                value => {
-                  triggered = true
-                  if (!captureId) {
-                    resolve(undefined)
-                    return
-                  }
-                  const error = value.value
-                  // Optimize: only set stack when the error catched.
-                  if (error.instanceof(Global.Error as LppFunction)) {
-                    const traceback = new LppArray(
-                      value.stack.map(v => new LppConstant(v.toString()))
-                    )
-                    error.set('stack', traceback)
-                  }
-                  dest.assign(error)
-                  const catchThread = controller.create(captureId, target)
-                  catchThread.lpp = new LppContext(
-                    parentThread.lpp ?? undefined,
-                    value => {
-                      if (parentThread.lpp) {
-                        parentThread.lpp.returnCallback(value)
-                        return thread.stopThisScript()
-                      } else throw new LppError('useOutsideFunction')
-                    },
-                    value => {
-                      if (parentThread.lpp) {
-                        // interrupt the thread.
-                        parentThread.lpp.exceptionCallback(value)
-                        return thread.stopThisScript()
-                      }
-                      this.handleException(value)
+                  if (value instanceof LppReturn) {
+                    if (parentThread.lpp) {
+                      parentThread.lpp.resolve(value)
+                      // return tryThread.stopThisScript()
+                    } else throw new LppError('useOutsideFunction')
+                  } else {
+                    triggered = true
+                    if (!captureId) {
+                      resolve(undefined)
+                      return
                     }
-                  )
-                  controller.wait(catchThread).then(() => {
-                    resolve(undefined)
-                  })
+                    const error = value.value
+                    // Optimize: only set stack when the error catched.
+                    if (error.instanceof(Global.Error as LppFunction)) {
+                      const traceback = new LppArray(
+                        value.stack.map(v => new LppConstant(v.toString()))
+                      )
+                      error.set('stack', traceback)
+                    }
+                    dest.assign(error)
+                    const catchThread = controller.create(captureId, target)
+                    catchThread.lpp = new LppContext(
+                      parentThread.lpp ?? undefined,
+                      value => {
+                        if (parentThread.lpp) {
+                          parentThread.lpp.resolve(value)
+                          // return thread.stopThisScript()
+                        } else {
+                          if (value instanceof LppReturn)
+                            throw new LppError('useOutsideFunction')
+                          this.handleException(value)
+                        }
+                      }
+                    )
+                    controller.wait(catchThread).then(() => {
+                      resolve(undefined)
+                    })
+                  }
                 }
               )
               controller.wait(tryThread).then(() => {
@@ -1324,8 +1310,8 @@ declare let Scratch: ScratchContext
         )
         if (thread.lpp) {
           // interrupt the thread.
-          thread.lpp.exceptionCallback(result)
-          return void thread.stopThisScript() as never
+          thread.lpp.resolve(result)
+          return new LppConstant(null)
         }
         this.handleException(result)
       }
@@ -1345,7 +1331,7 @@ declare let Scratch: ScratchContext
           )?.id
       const block = id
         ? container.getBlock(id) ?? this.vm.runtime.flyoutBlocks.getBlock(id)
-        : undefined
+        : this.vm.runtime.flyoutBlocks.getBlock(thread.peekStack())
       if (!block) {
         throw new Error('lpp: cannot get active block')
       }
@@ -1443,9 +1429,6 @@ declare let Scratch: ScratchContext
               ctx.self ?? new LppConstant(null),
               val => {
                 resolve(val)
-              },
-              val => {
-                resolve(val)
               }
             )
             for (const [key, value] of metadata.signature.entries()) {
@@ -1459,7 +1442,7 @@ declare let Scratch: ScratchContext
             // })
             // Call callback (if exists) when the thread is finished.
             controller.wait(thread).then(() => {
-              ;(thread as Thread)?.lpp?.returnCallback(
+              ;(thread as Thread)?.lpp?.resolve(
                 new LppReturn(new LppConstant(null))
               )
             })

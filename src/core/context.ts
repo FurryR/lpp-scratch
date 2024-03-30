@@ -1,5 +1,5 @@
 import type { LppFunction } from './type'
-import { LppValue, LppConstant, LppReference } from './type'
+import { LppValue, LppConstant, LppReference, LppPromise } from './type'
 
 /**
  * LppFunction return value.
@@ -131,20 +131,12 @@ export class LppContext {
   closure: LppClosure = new LppClosure()
 
   /**
-   * Exception callback wrapper.
+   * Callback wrapper.
    * @param value Exception.
    */
-  exceptionCallback(value: LppException) {
-    this._exceptionCallback(value)
-    this.clearCallbacks()
-  }
-  /**
-   * Return callback wrapper.
-   * @param value Result.
-   */
-  returnCallback(value: LppReturn) {
-    this._returnCallback(value)
-    this.clearCallbacks()
+  resolve(value: LppResult) {
+    this.callback(value)
+    this.callback = () => {}
   }
   /**
    * Get variable.
@@ -154,13 +146,6 @@ export class LppContext {
   get(name: string): LppReference {
     if (this.closure.has(name)) return this.closure.get(name)
     else return this.parent ? this.parent.get(name) : this.closure.get(name)
-  }
-  /**
-   * Clear callbacks.
-   */
-  clearCallbacks() {
-    this._exceptionCallback = () => {}
-    this._returnCallback = () => {}
   }
 
   /**
@@ -173,13 +158,11 @@ export class LppContext {
   /**
    * Construct a new context.
    * @param parent Parent closure.
-   * @param returnCallback Callback if function returns.
-   * @param exceptionCallback Callback if function throws.
+   * @param callback Callback for return / exception.
    */
   constructor(
     public parent: LppContext | undefined,
-    private _returnCallback: (value: LppReturn) => void,
-    private _exceptionCallback: (value: LppException) => void
+    private callback: (value: LppResult) => void
   ) {
     this.closure = new LppClosure()
     this.parent = parent
@@ -205,10 +188,35 @@ export class LppFunctionContext extends LppContext {
   constructor(
     parent: LppContext | undefined,
     public self: LppValue,
-    returnCallback: (value: LppReturn) => void,
-    exceptionCallback: (value: LppException) => void
+    callback: (value: LppResult) => void
   ) {
-    super(parent, returnCallback, exceptionCallback)
+    super(parent, callback)
+  }
+}
+export class LppAsyncFunctionContext extends LppFunctionContext {
+  promise?: {
+    promise: PromiseLike<LppValue>
+    resolve: (value: LppValue | PromiseLike<LppValue>) => void
+    reject: (reason?: unknown) => void
+  }
+  await() {
+    if (!this.promise) {
+      let resolveFn: (v: LppValue | PromiseLike<LppValue>) => void
+      let rejectFn: (reason: unknown) => void
+      resolveFn = rejectFn = () => {
+        throw new Error('not initialized')
+      }
+      const pm = new Promise<LppValue>((resolve, reject) => {
+        resolveFn = resolve
+        rejectFn = reject
+      })
+      this.promise = {
+        promise: pm,
+        resolve: resolveFn,
+        reject: rejectFn
+      }
+      this.resolve(new LppReturn(new LppPromise(pm)))
+    }
   }
 }
 /**
