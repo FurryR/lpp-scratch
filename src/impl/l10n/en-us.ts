@@ -10,9 +10,10 @@ export default {
   'lpp.block.construct.Number': 'Number',
   'lpp.block.construct.String': 'String',
   'lpp.block.construct.Function': 'function',
+  'lpp.block.construct.AsyncFunction': 'async function',
   /// Operator
   'lpp.block.operator.var': 'var',
-  'lpp.block.operator.self': 'self',
+  'lpp.block.operator.self': 'this',
   /// Statement
   'lpp.block.statement.return': 'return',
   'lpp.block.statement.throw': 'throw',
@@ -62,7 +63,7 @@ export default {
     'Unable to find the block in Blockly workspace. The block might not belong to the target that you are currently editing.',
   'lpp.error.position': 'Position:',
   'lpp.error.context': 'Context:',
-  'lpp.error.self': 'Self:',
+  'lpp.error.self': 'This:',
   'lpp.error.arguments': 'Arguments:',
   'lpp.error.hint': 'For further information please check DevTools Console.',
   // Category
@@ -88,6 +89,8 @@ export default {
     'Construct an Object object with specified structure. Use "+" to add or "-" to remove an element.',
   'lpp.tooltip.construct.Function':
     'Construct an Function object. Use "+" to add or "-" to remove an argument.',
+  'lpp.tooltip.construct.AsyncFunction':
+    'Construct an asynchronous Function object. Use "+" to add or "-" to remove an argument.',
   'lpp.tooltip.operator.get': 'Get specified member of specified object.',
   'lpp.tooltip.operator.binaryOp': 'Do binary operations.',
   'lpp.tooltip.operator.unaryOp': 'Do unary operations.',

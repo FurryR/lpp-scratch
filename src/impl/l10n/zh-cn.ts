@@ -10,6 +10,7 @@ export default {
   'lpp.block.construct.Number': '数字',
   'lpp.block.construct.String': '字符串',
   'lpp.block.construct.Function': '函数',
+  'lpp.block.construct.AsyncFunction': '异步函数',
   /// 运算符
   'lpp.block.operator.var': '变量',
   'lpp.block.operator.self': '自身',
@@ -78,6 +79,8 @@ export default {
     '以指定结构构造 Object 对象。可使用“+”或“-”对元素进行增减。',
   'lpp.tooltip.construct.Function':
     '构造 Function 对象。可使用“+”或“-”对参数进行增减。',
+  'lpp.tooltip.construct.AsyncFunction':
+    '构造异步 Function 对象。可使用“+”或“-”对参数进行增减。',
   'lpp.tooltip.operator.get': '获得对象下的某个成员。',
   'lpp.tooltip.operator.binaryOp': '进行二元运算。',
   'lpp.tooltip.operator.unaryOp': '进行一元运算。',

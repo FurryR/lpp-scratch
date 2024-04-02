@@ -32,7 +32,8 @@ import {
   LppHandle,
   isPromise,
   async,
-  raise
+  raise,
+  LppAsyncFunctionContext
 } from './core'
 import { version, developers } from '../package.json'
 import * as Core from './core'
@@ -668,7 +669,7 @@ import { LppBoundArg } from './impl/boundarg'
       args: { op: string; value: unknown },
       util: VM.BlockUtility
     ):
-      | PromiseProxy<Wrapper<LppValue>>
+      | PromiseProxy<Wrapper<LppValue | LppReference | LppBoundArg>>
       | Wrapper<LppValue | LppReference | LppBoundArg> {
       /**
        * ['+', '+'],
@@ -702,52 +703,57 @@ import { LppBoundArg } from './impl/boundarg'
               }
               return new LppBoundArg(value.value)
             }
-            // case 'await': {
-            //   const v = asValue(value)
-            //   const then = v.get('then')
-            //   const error = v.get('catch')
-            //   const thread = util.thread
-            //   /** @type {LppFunction} */
-            //   let thenFn
-            //   /** @type {LppFunction?} */
-            //   let catchFn
-            //   /** @type {LppValue} */
-            //   let thenSelf
-            //   /** @type {LppValue} */
-            //   let catchSelf
-            //   if (then instanceof LppReference) {
-            //     if (!(then.value instanceof LppFunction)) return v
-            //     thenFn = then.value
-            //     thenSelf = then.parent.deref() ?? new LppConstant(null)
-            //   } else {
-            //     if (!(then instanceof LppFunction)) return v
-            //     thenFn = then
-            //     thenSelf = new LppConstant(null)
-            //   }
-            //   if (error instanceof LppReference) {
-            //     if (error.value instanceof LppFunction) {
-            //     catchFn = error.value
-            //     catchSelf = error.parent.deref() ?? new LppConstant(null)
-            //     }
-            //   } else {
-            //     if (error instanceof LppFunction) {
-            //       catchFn = error
-            //       catchSelf = new LppConstant(null)
-            //     }
-            //   }
-            //   function registerThenCallback() {
-
-            //   }
-            //   /** @type {((val: LppValue) => void)?} */
-            //   let resolveFn = null
-            //   /** @type {LppValue?} */
-            //   let syncResult = null
-            //   fn.apply(self, [new LppFunction()])
-            // }
+            case 'await': {
+              const thread = util.thread as Thread
+              if (!thread.lpp) throw new LppError('useOutsideAsyncFunction')
+              const lpp = thread.lpp.unwind()
+              if (!(lpp instanceof LppAsyncFunctionContext))
+                throw new LppError('useOutsideAsyncFunction')
+              const v = asValue(value)
+              const then = v.get('then')
+              let thenFn: LppFunction
+              let thenSelf: LppValue
+              if (then instanceof LppReference) {
+                if (!(then.value instanceof LppFunction)) return v
+                thenFn = then.value
+                thenSelf = then.parent.deref() ?? new LppConstant(null)
+              } else {
+                if (!(then instanceof LppFunction)) return v
+                thenFn = then
+                thenSelf = new LppConstant(null)
+              }
+              lpp.await()
+              return ImmediatePromise.sync(
+                new ImmediatePromise<LppValue>(resolve => {
+                  thenFn.apply(thenSelf, [
+                    new LppFunction(ctx => {
+                      resolve(ctx.args[0] ?? new LppConstant(null))
+                      return new LppReturn(new LppConstant(null))
+                    }),
+                    new LppFunction(ctx => {
+                      thread.lpp?.resolve(
+                        new LppException(ctx.args[0] ?? new LppConstant(null))
+                      )
+                      thread.stopThisScript()
+                      resolve(new LppConstant(null))
+                      return new LppReturn(new LppConstant(null))
+                    })
+                  ])
+                })
+              )
+            }
             default:
               throw new Error('lpp: unknown operand')
           }
         })()
+        if (isPromise(res)) {
+          return this.asap(
+            res.then(val => {
+              return new Wrapper(val)
+            }),
+            util.thread
+          )
+        }
         return new Wrapper(res)
       } catch (e) {
         this.handleError(e)
@@ -1027,6 +1033,50 @@ import { LppBoundArg } from './impl/boundarg'
       }
     }
     /**
+     * Construct an asynchronous Function.
+     * @param args ID for finding where the function is.
+     * @param util Scratch util.
+     * @returns A function object.
+     */
+    constructAsyncFunction(
+      args: Record<string, unknown>,
+      util: VM.BlockUtility
+    ): Wrapper<LppFunction> {
+      try {
+        const { thread, target } = util
+        this.util = util
+        const Target = target.constructor as TargetConstructor
+        // runtime hack by @FurryR.
+        const block = this.getActiveBlockInstance(args, thread)
+        const signature: string[] = []
+        const len = parseInt(
+          (block?.mutation as Record<string, string> | null)?.length ?? '0',
+          10
+        )
+        for (let i = 0; i < len; i++) {
+          if (typeof args[`ARG_${i}`] !== 'object')
+            signature[i] = String(args[`ARG_${i}`])
+          else throw new LppError('syntaxError')
+        }
+        const blocks = thread.target.blocks
+        const lppThread = thread as Thread
+        return new Wrapper(
+          Metadata.attach(
+            new LppFunction(this.executeScratchAsync.bind(this, Target)),
+            new Serialization.ScratchMetadata(
+              signature,
+              [blocks, block.id],
+              target.sprite.clones[0].id,
+              target.id,
+              lppThread.lpp
+            )
+          )
+        )
+      } catch (e) {
+        this.handleError(e)
+      }
+    }
+    /**
      * Get value of specified function variable.
      * @param args Variable name.
      * @param util Scratch util.
@@ -1061,9 +1111,52 @@ import { LppBoundArg } from './impl/boundarg'
         const val = asValue(value)
         const lppThread = thread as Thread
         if (lppThread.lpp) {
-          const ctx = lppThread.lpp.unwind()
-          if (ctx instanceof LppFunctionContext) {
-            ctx.resolve(new LppReturn(val))
+          const lpp = lppThread.lpp.unwind()
+          if (lpp instanceof LppAsyncFunctionContext) {
+            const then = val.get('then')
+            let thenFn: LppFunction
+            let thenSelf: LppValue
+            if (then instanceof LppReference) {
+              if (!(then.value instanceof LppFunction)) {
+                lpp.await()
+                lpp.promise?.resolve(val)
+                return thread.stopThisScript()
+              }
+              thenFn = then.value
+              thenSelf = then.parent.deref() ?? new LppConstant(null)
+            } else {
+              if (!(then instanceof LppFunction)) {
+                lpp.await()
+                lpp.promise?.resolve(val)
+                return thread.stopThisScript()
+              }
+              thenFn = then
+              thenSelf = new LppConstant(null)
+            }
+            lpp.await()
+            return this.asap(
+              ImmediatePromise.sync(
+                new ImmediatePromise<void>(resolve => {
+                  thenFn.apply(thenSelf, [
+                    new LppFunction(ctx => {
+                      lpp.promise?.resolve(ctx.args[0] ?? new LppConstant(null))
+                      thread.stopThisScript()
+                      resolve()
+                      return new LppReturn(new LppConstant(null))
+                    }),
+                    new LppFunction(ctx => {
+                      lpp.promise?.reject(ctx.args[0] ?? new LppConstant(null))
+                      thread.stopThisScript()
+                      resolve()
+                      return new LppReturn(new LppConstant(null))
+                    })
+                  ])
+                })
+              ),
+              util.thread
+            )
+          } else if (lpp instanceof LppFunctionContext) {
+            lpp.resolve(new LppReturn(val))
             return thread.stopThisScript()
           }
         }
@@ -1400,6 +1493,56 @@ import { LppBoundArg } from './impl/boundarg'
         ? new PromiseProxy<T>(res, postProcess, postProcess)
         : res
     }
+    private executeScratchAsync(
+      Target: TargetConstructor,
+      ctx: LppHandle
+    ): LppResult | PromiseLike<LppResult> {
+      if (
+        Metadata.hasMetadata(ctx.fn) &&
+        ctx.fn.metadata instanceof Serialization.ScratchMetadata
+      ) {
+        const metadata = ctx.fn.metadata
+        let target: VM.Target | undefined
+        if (metadata.target)
+          target = this.vm.runtime.getTargetById(metadata.target)
+        if (!target) target = this.createDummyTarget(Target, metadata.blocks[0])
+        const id = metadata.blocks[0].getBlock(metadata.blocks[1])?.inputs
+          .SUBSTACK?.block
+        if (!id) return new LppReturn(new LppConstant(null))
+        if (!this.util) throw new Error('lpp: util used before initialization')
+        const controller = new ThreadController(
+          this.vm.runtime as LppCompatibleRuntime,
+          this.util
+        )
+        const thread = controller.create(id, target)
+        return ImmediatePromise.sync(
+          new ImmediatePromise(resolve => {
+            const lpp = (thread.lpp = new LppAsyncFunctionContext(
+              metadata.closure,
+              ctx.self ?? new LppConstant(null),
+              val => {
+                resolve(val)
+              }
+            ))
+            for (const [key, value] of metadata.signature.entries()) {
+              if (key < ctx.args.length)
+                thread.lpp.closure.set(value, ctx.args[key])
+              else thread.lpp.closure.set(value, new LppConstant(null))
+            }
+            // TODO: no reserved variable names!
+            // builtin.Array.apply(null, args).then(value => {
+            //   thread.lpp.closure.set('arguments', value)
+            // })
+            // Call callback (if exists) when the thread is finished.
+            controller.wait(thread).then(() => {
+              lpp.await()
+              lpp.promise?.resolve(new LppConstant(null))
+            })
+          })
+        )
+      }
+      return new LppReturn(new LppConstant(null))
+    }
     private executeScratch(
       Target: TargetConstructor,
       ctx: LppHandle
@@ -1424,13 +1567,13 @@ import { LppBoundArg } from './impl/boundarg'
         const thread = controller.create(id, target)
         return ImmediatePromise.sync(
           new ImmediatePromise(resolve => {
-            thread.lpp = new LppFunctionContext(
+            const lpp = (thread.lpp = new LppFunctionContext(
               metadata.closure,
               ctx.self ?? new LppConstant(null),
               val => {
                 resolve(val)
               }
-            )
+            ))
             for (const [key, value] of metadata.signature.entries()) {
               if (key < ctx.args.length)
                 thread.lpp.closure.set(value, ctx.args[key])
@@ -1442,9 +1585,7 @@ import { LppBoundArg } from './impl/boundarg'
             // })
             // Call callback (if exists) when the thread is finished.
             controller.wait(thread).then(() => {
-              ;(thread as Thread)?.lpp?.resolve(
-                new LppReturn(new LppConstant(null))
-              )
+              lpp.resolve(new LppReturn(new LppConstant(null)))
             })
           })
         )

@@ -81,6 +81,7 @@ export class Category {
       } else {
         for (const key of Object.keys(map)) {
           res[key] = function (this: Block, ...args: never[]) {
+            if (!(this instanceof Blockly.Block)) return
             if (key === 'init') {
               // Prepatch (color, icon, etc.)
               prepatch(this)

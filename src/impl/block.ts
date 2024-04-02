@@ -778,6 +778,59 @@ export function defineExtension(
             }
           }))
         )
+        .register(
+          'constructAsyncFunction',
+          Reporter.Square((Blockly, block) => ({
+            init() {
+              block.setTooltip(
+                formatMessage('lpp.tooltip.construct.AsyncFunction')
+              )
+              const property = block as MutableBlock
+              Input.Text(block, 'BEGIN', [
+                formatMessage('lpp.block.construct.AsyncFunction'),
+                '('
+              ])
+              /// Signature
+              Input.Text(block, 'END', ')')
+              Input.Statement(block, 'SUBSTACK')
+              property.length = 0
+              updateButton(Blockly, property)
+            },
+            mutationToDom() {
+              const elem = document.createElement('mutation')
+              if (isMutableBlock(block)) {
+                elem.setAttribute('length', String(block.length))
+              }
+              return elem
+            },
+            domToMutation(mutation: HTMLElement) {
+              const length = parseInt(
+                mutation.getAttribute('length') ?? '0',
+                10
+              )
+              if (isMutableBlock(block)) {
+                if (length > block.length) {
+                  for (let i = block.length; i < length; i++) {
+                    if (i > 0) {
+                      block.appendDummyInput(`COMMA_${i}`).appendField(',')
+                      block.moveInputBefore(`COMMA_${i}`, 'END')
+                    }
+                    Input.String(block, `ARG_${i}`, '')
+                    block.moveInputBefore(`ARG_${i}`, 'END')
+                  }
+                } else {
+                  for (let i = length; i < block.length; i++) {
+                    block.removeInput(`ARG_${i}`, true)
+                    block.removeInput(`COMMA_${i}`, true)
+                  }
+                  cleanInputs(block)
+                }
+                block.length = length
+                updateButton(Blockly, block)
+              }
+            }
+          }))
+        )
     )
     .register(
       new Category(() => `🔢 ${formatMessage('lpp.category.operator')}`)
