@@ -384,6 +384,7 @@ import { LppBoundArg } from './impl/boundarg'
         }
       }
       // Patch Function.
+      // TODO: These functions are deprecated and will be moved in future versions.
       Global.Function.set(
         'serialize',
         LppFunction.native(({ args }) => {
@@ -421,12 +422,18 @@ import { LppBoundArg } from './impl/boundarg'
             const Blocks = runtime.flyoutBlocks.constructor as BlocksConstructor
             const blocks = new Blocks(runtime, true)
             Serialization.deserializeBlock(blocks, val.script)
+            const blockId = val.script[val.block]?.id
             const Target = runtime.getTargetForStage()
               ?.constructor as TargetConstructor
             if (!Target) throw new Error('lpp: project is disposed')
             return new LppReturn(
               Metadata.attach(
-                new LppFunction(this.executeScratch.bind(this, Target)),
+                new LppFunction(
+                  (blockId === 'constructAsyncFunction'
+                    ? this.executeScratchAsync
+                    : this.executeScratch
+                  ).bind(this, Target)
+                ),
                 new Serialization.ScratchMetadata(
                   val.signature,
                   [blocks, val.block],
@@ -722,7 +729,7 @@ import { LppBoundArg } from './impl/boundarg'
                 thenFn = then
                 thenSelf = new LppConstant(null)
               }
-              lpp.await()
+              lpp.detach()
               return ImmediatePromise.sync(
                 new ImmediatePromise<LppValue>(resolve => {
                   thenFn.apply(thenSelf, [
@@ -1118,7 +1125,7 @@ import { LppBoundArg } from './impl/boundarg'
             let thenSelf: LppValue
             if (then instanceof LppReference) {
               if (!(then.value instanceof LppFunction)) {
-                lpp.await()
+                lpp.detach()
                 lpp.promise?.resolve(val)
                 return thread.stopThisScript()
               }
@@ -1126,14 +1133,14 @@ import { LppBoundArg } from './impl/boundarg'
               thenSelf = then.parent.deref() ?? new LppConstant(null)
             } else {
               if (!(then instanceof LppFunction)) {
-                lpp.await()
+                lpp.detach()
                 lpp.promise?.resolve(val)
                 return thread.stopThisScript()
               }
               thenFn = then
               thenSelf = new LppConstant(null)
             }
-            lpp.await()
+            lpp.detach()
             return this.asap(
               ImmediatePromise.sync(
                 new ImmediatePromise<void>(resolve => {
@@ -1535,7 +1542,7 @@ import { LppBoundArg } from './impl/boundarg'
             // })
             // Call callback (if exists) when the thread is finished.
             controller.wait(thread).then(() => {
-              lpp.await()
+              lpp.detach()
               lpp.promise?.resolve(new LppConstant(null))
             })
           })

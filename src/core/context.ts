@@ -199,7 +199,7 @@ export class LppAsyncFunctionContext extends LppFunctionContext {
     resolve: (value: LppValue | PromiseLike<LppValue>) => void
     reject: (reason?: unknown) => void
   }
-  await() {
+  detach() {
     if (!this.promise) {
       let resolveFn: (v: LppValue | PromiseLike<LppValue>) => void
       let rejectFn: (reason: unknown) => void
