@@ -190,6 +190,7 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
         }
         // (Pure) math operands
         case '-':
+        case '**':
         case '/':
         case '%':
         case '<<':

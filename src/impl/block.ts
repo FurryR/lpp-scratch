@@ -388,6 +388,7 @@ const minusImage =
  * @returns Extension.
  */
 export function defineExtension(
+  id: string,
   color: string,
   runtime: VM.Runtime,
   formatMessage: (id: string) => string
@@ -488,14 +489,21 @@ export function defineExtension(
    * @param Blockly Blockly Blockly.
    * @param block Target block.
    */
-  const updateButton = (Blockly: BlocklyInstance, block: MutableBlock) => {
+  const updateButton = (
+    Blockly: BlocklyInstance,
+    block: MutableBlock,
+    minValue: number = 0,
+    maxValue: number = Infinity
+  ) => {
     if (block.length !== undefined) {
       block.removeInput('MINUS', true)
       block.removeInput('PLUS', true)
       const start = block.inputList[0]?.name
-      block.appendDummyInput('PLUS').appendField(Plus(Blockly, block))
-      if (start) block.moveInputBefore('PLUS', start)
-      if (block.length > 0) {
+      if (block.length < maxValue) {
+        block.appendDummyInput('PLUS').appendField(Plus(Blockly, block))
+        if (start) block.moveInputBefore('PLUS', start)
+      }
+      if (block.length > minValue) {
         block.appendDummyInput('MINUS').appendField(Minus(Blockly, block))
         if (start) block.moveInputBefore('MINUS', start)
       }
@@ -504,22 +512,22 @@ export function defineExtension(
   // TODO: optimization: only delete changed inputs for performance
   /**
    * Clean unused argument from vm.
-   * @param block Specified block.
+   * @param id Specified block.
+   * @param targetInput input id list to be deleted.
    * @author CST1229
    */
-  const cleanInputs = (block: ScratchBlocks.BlockSvg) => {
+  function cleanInputs(id: string, targetInput: string[]) {
     const target = runtime.getEditingTarget()
-    const vmBlock = target?.blocks.getBlock(block.id)
-    if (!vmBlock || !target) return
+    if (!target) return
+    const block = target.blocks.getBlock(id)
+    if (!block) return
 
-    const usedInputs = new Set(block.inputList.map(i => i.name))
-
-    const inputs = vmBlock.inputs
+    const inputs = block.inputs
     for (const name of Object.keys(inputs)) {
       const input = inputs[name]
-      if (!usedInputs.has(name)) {
-        const blocks = target.blocks as unknown as {
-          deleteBlock(input: unknown): unknown
+      if (targetInput.includes(name)) {
+        const blocks = target.blocks as VM.Blocks & {
+          deleteBlock(id: string | null): void
         }
         blocks.deleteBlock(input.block)
         blocks.deleteBlock(input.shadow)
@@ -527,7 +535,7 @@ export function defineExtension(
       }
     }
   }
-  return new Extension('lpp', color)
+  return new Extension(id, color)
     .register(
       /// Documentation
       new Button(
@@ -662,11 +670,13 @@ export function defineExtension(
                     block.moveInputBefore(`ARG_${i}`, 'END')
                   }
                 } else {
+                  const removeList: string[] = []
                   for (let i = length; i < block.length; i++) {
                     block.removeInput(`ARG_${i}`, true)
                     block.removeInput(`COMMA_${i}`, true)
+                    removeList.push(`ARG_${i}`, `COMMA_${i}`)
                   }
-                  cleanInputs(block)
+                  cleanInputs(block.id, removeList)
                 }
                 block.length = length
                 updateButton(Blockly, block)
@@ -713,13 +723,20 @@ export function defineExtension(
                     block.moveInputBefore(`KEY_${i}`, `COLON_${i}`)
                   }
                 } else {
+                  const removeList: string[] = []
                   for (let i = length; i < block.length; i++) {
                     block.removeInput(`KEY_${i}`, true)
                     block.removeInput(`COLON_${i}`, true)
                     block.removeInput(`VALUE_${i}`, true)
                     block.removeInput(`COMMA_${i}`, true)
+                    removeList.push(
+                      `KEY_${i}`,
+                      `COLON_${i}`,
+                      `VALUE_${i}`,
+                      `COMMA_${i}`
+                    )
                   }
-                  cleanInputs(block)
+                  cleanInputs(block.id, removeList)
                 }
                 block.length = length
                 updateButton(Blockly, block)
@@ -766,11 +783,13 @@ export function defineExtension(
                     block.moveInputBefore(`ARG_${i}`, 'END')
                   }
                 } else {
+                  const removeList: string[] = []
                   for (let i = length; i < block.length; i++) {
                     block.removeInput(`ARG_${i}`, true)
                     block.removeInput(`COMMA_${i}`, true)
+                    removeList.push(`ARG_${i}`, `COMMA_${i}`)
                   }
-                  cleanInputs(block)
+                  cleanInputs(block.id, removeList)
                 }
                 block.length = length
                 updateButton(Blockly, block)
@@ -819,11 +838,13 @@ export function defineExtension(
                     block.moveInputBefore(`ARG_${i}`, 'END')
                   }
                 } else {
+                  const removeList: string[] = []
                   for (let i = length; i < block.length; i++) {
                     block.removeInput(`ARG_${i}`, true)
                     block.removeInput(`COMMA_${i}`, true)
+                    removeList.push(`ARG_${i}`, `COMMA_${i}`)
                   }
-                  cleanInputs(block)
+                  cleanInputs(block.id, removeList)
                 }
                 block.length = length
                 updateButton(Blockly, block)
@@ -836,39 +857,125 @@ export function defineExtension(
       new Category(() => `🔢 ${formatMessage('lpp.category.operator')}`)
         .register(
           'binaryOp',
-          Reporter.Square((Blockly, block) => () => {
-            block.setTooltip(formatMessage('lpp.tooltip.operator.binaryOp'))
-            Input.String(block, 'lhs', '')
-            block.appendDummyInput().appendField(
-              new Blockly.FieldDropdown([
-                ['=', '='],
-                ['.', '.'],
-                ['+', '+'],
-                ['-', '-'],
-                ['*', '*'],
-                ['/', '/'],
-                ['%', '%'],
-                ['==', '=='],
-                ['!=', '!='],
-                ['>', '>'],
-                ['<', '<'],
-                ['>=', '>='],
-                ['<=', '<='],
-                ['&&', '&&'],
-                ['||', '||'],
-                ['<<', '<<'],
-                ['>>', '>>'],
-                ['>>>', '>>>'],
-                ['&', '&'],
-                ['|', '|'],
-                ['^', '^'],
-                ['instanceof', 'instanceof'],
-                ['in', 'in']
-              ]) as ScratchBlocks.Field<string>,
-              'op'
-            )
-            Input.String(block, 'rhs', '')
-          })
+          Reporter.Square((Blockly, block) => ({
+            init() {
+              block.setTooltip(formatMessage('lpp.tooltip.operator.binaryOp'))
+              // Input.String(block, 'lhs', '')
+              // block.appendDummyInput().appendField(
+              //   new Blockly.FieldDropdown([
+              //     ['=', '='],
+              //     ['.', '.'],
+              //     ['+', '+'],
+              //     ['-', '-'],
+              //     ['*', '*'],
+              //     ['/', '/'],
+              //     ['%', '%'],
+              //     ['==', '=='],
+              //     ['!=', '!='],
+              //     ['>', '>'],
+              //     ['<', '<'],
+              //     ['>=', '>='],
+              //     ['<=', '<='],
+              //     ['&&', '&&'],
+              //     ['||', '||'],
+              //     ['<<', '<<'],
+              //     ['>>', '>>'],
+              //     ['>>>', '>>>'],
+              //     ['&', '&'],
+              //     ['|', '|'],
+              //     ['^', '^'],
+              //     ['instanceof', 'instanceof'],
+              //     ['in', 'in']
+              //   ]) as ScratchBlocks.Field<string>,
+              //   'op'
+              // )
+              // Input.String(block, 'rhs', '')
+              block.appendDummyInput('END')
+              const property = block as MutableBlock
+              property.length = 0
+              if (block.domToMutation && block.mutationToDom)
+                block.domToMutation(block.mutationToDom())
+              updateButton(Blockly, property, 2)
+            },
+            mutationToDom() {
+              const elem = document.createElement('mutation')
+              if (isMutableBlock(block)) {
+                elem.setAttribute('length', String(block.length))
+              }
+              return elem
+            },
+            domToMutation(mutation: HTMLElement) {
+              const length = Math.max(
+                2,
+                parseInt(mutation.getAttribute('length') ?? '0', 10)
+              )
+              if (isMutableBlock(block)) {
+                if (length > block.length) {
+                  for (let i = block.length; i < length; i++) {
+                    if (i > 0) {
+                      block.appendDummyInput(`OP_${i}`).appendField(
+                        new Blockly.FieldDropdown([
+                          ['.', '.'],
+                          ['?.', '?.'],
+                          ['**', '**'],
+                          ['*', '*'],
+                          ['/', '/'],
+                          ['+', '+'],
+                          ['%', '%'],
+                          ['-', '-'],
+                          ['<<', '<<'],
+                          ['>>', '>>'],
+                          ['>>>', '>>>'],
+                          ['<', '<'],
+                          ['<=', '<='],
+                          ['>', '>'],
+                          ['>=', '>='],
+                          ['in', 'in'],
+                          ['instanceof', 'instanceof'],
+                          ['==', '=='],
+                          ['!=', '!='],
+                          ['&', '&'],
+                          ['^', '^'],
+                          ['|', '|'],
+                          ['&&', '&&'],
+                          ['||', '||'],
+                          ['=', '='],
+                          [',', ',']
+                        ]) as ScratchBlocks.Field<string>,
+                        `OP_${i}`
+                      )
+                      const fields = runtime
+                        .getEditingTarget()
+                        ?.blocks.getBlock(block.id)?.fields
+                      if (fields)
+                        fields[`OP_${i}`] = {
+                          id: null,
+                          name: `OP_${i}`,
+                          value: '.'
+                        }
+                      block.moveInputBefore(`OP_${i}`, 'END')
+                    }
+                    Input.String(block, `ARG_${i}`, '')
+                    block.moveInputBefore(`ARG_${i}`, 'END')
+                  }
+                } else {
+                  const removeList: string[] = []
+                  for (let i = length; i < block.length; i++) {
+                    block.removeInput(`ARG_${i}`, true)
+                    block.removeInput(`OP_${i}`, true)
+                    const fields = runtime
+                      .getEditingTarget()
+                      ?.blocks.getBlock(block.id)?.fields
+                    if (fields) delete fields[`OP_${i}`]
+                    removeList.push(`ARG_${i}`)
+                  }
+                  cleanInputs(block.id, removeList)
+                }
+                block.length = length
+                updateButton(Blockly, block, 2)
+              }
+            }
+          }))
         )
         .register(
           'unaryOp',
@@ -928,11 +1035,13 @@ export function defineExtension(
                     block.moveInputBefore(`ARG_${i}`, 'END')
                   }
                 } else {
+                  const removeList: string[] = []
                   for (let i = length; i < block.length; i++) {
                     block.removeInput(`ARG_${i}`, true)
                     block.removeInput(`COMMA_${i}`, true)
+                    removeList.push(`ARG_${i}`, `COMMA_${i}`)
                   }
-                  cleanInputs(block)
+                  cleanInputs(block.id, removeList)
                 }
                 block.length = length
                 updateButton(Blockly, block)
@@ -976,11 +1085,13 @@ export function defineExtension(
                     block.moveInputBefore(`ARG_${i}`, 'END')
                   }
                 } else {
+                  const removeList: string[] = []
                   for (let i = length; i < block.length; i++) {
                     block.removeInput(`ARG_${i}`, true)
                     block.removeInput(`COMMA_${i}`, true)
+                    removeList.push(`ARG_${i}`, `COMMA_${i}`)
                   }
-                  cleanInputs(block)
+                  cleanInputs(block.id, removeList)
                 }
                 block.length = length
                 updateButton(Blockly, block)

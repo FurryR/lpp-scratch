@@ -1,8 +1,8 @@
 import Global from '../global'
 import { LppResult, LppException, LppTraceback, LppReturn } from '../context'
-import { async, asValue } from '../helper'
+import { async, asValue, asBoolean, compare, equal } from '../helper'
 import { lookupPrototype } from '../helper/prototype'
-import { LppValue, LppError } from './base'
+import { LppValue, LppError, LppBinaryOperator, LppUnaryOperator } from './base'
 import { LppReference } from './reference'
 import { LppConstant } from './constant'
 import { LppObject } from './object'
@@ -131,6 +131,74 @@ export class LppFunction extends LppObject {
    */
   apply(self: LppValue, args: LppValue[]): LppResult | PromiseLike<LppResult> {
     return this.caller(new LppHandle(this, self, args))
+  }
+  /**
+   * Do arithmetic operations.
+   * @param op Binary operator.
+   * @param rhs Right hand side of the operation.
+   */
+  calc(op: LppBinaryOperator | LppUnaryOperator, rhs?: LppValue): LppValue {
+    if (rhs) {
+      switch (op) {
+        case '=': {
+          throw new LppError('assignOfConstant')
+        }
+        case '==': {
+          return new LppConstant(equal(this, rhs))
+        }
+        case '!=': {
+          return new LppConstant(!equal(this, rhs))
+        }
+        case '>':
+        case '<':
+        case '>=':
+        case '<=': {
+          return new LppConstant(compare(this, op, rhs))
+        }
+        case '&&':
+        case '||': {
+          const left = asBoolean(this)
+          const right = asBoolean(rhs)
+          return new LppConstant(op === '&&' ? left && right : left || right)
+        }
+        case 'instanceof': {
+          if (rhs instanceof LppFunction) {
+            return new LppConstant(this.instanceof(rhs))
+          }
+          throw new LppError('notCallable')
+        }
+        // (Pure) math operands
+        case '+':
+        case '*':
+        case '**':
+        case '-':
+        case '/':
+        case '%':
+        case '<<':
+        case '>>':
+        case '>>>':
+        case '&':
+        case '|':
+        case '^': {
+          return new LppConstant(NaN)
+        }
+      }
+    } else {
+      switch (op) {
+        case 'delete': {
+          throw new LppError('assignOfConstant')
+        }
+        case '!': {
+          return new LppConstant(!asBoolean(this))
+        }
+        case '+':
+        case '-':
+        case '~': {
+          return new LppConstant(NaN)
+        }
+      }
+    }
+    throw new Error('lpp: unknown operand')
   }
   /**
    * Call function as a constructor.

@@ -14,6 +14,7 @@ export type LppBinaryOperator =
   | '='
   | '+'
   | '*'
+  | '**'
   | '=='
   | '!='
   | '>'

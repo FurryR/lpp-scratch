@@ -103,11 +103,7 @@ export class LppObject extends LppValue {
           throw new LppError('assignOfConstant')
         }
         case '+': {
-          if (
-            !(this instanceof LppFunction) &&
-            rhs instanceof LppObject &&
-            !(rhs instanceof LppFunction)
-          ) {
+          if (rhs instanceof LppObject && !(rhs instanceof LppFunction)) {
             if (this.value.has('constructor') || rhs.value.has('constructor')) {
               return new LppConstant(NaN)
             }
@@ -148,6 +144,7 @@ export class LppObject extends LppValue {
         }
         // (Pure) math operands
         case '*':
+        case '**':
         case '-':
         case '/':
         case '%':

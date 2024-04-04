@@ -74,20 +74,28 @@ export class Category {
       const res: Record<string, unknown> = {}
       if (typeof map === 'function') {
         res.init = function (this: Block, ...args: never[]) {
+          // refuse to execute when it is called by Gandi collaboration system.
+          // note: collaboration works fine even with this.
+          if (!(this instanceof Blockly.Block)) {
+            return
+          }
           prepatch(this)
           const fn = value.init(Blockly, this) as (...args: never[]) => unknown
           return fn(...args)
         }
       } else {
-        for (const key of Object.keys(map)) {
-          res[key] = function (this: Block, ...args: never[]) {
-            if (!(this instanceof Blockly.Block)) return
-            if (key === 'init') {
+        for (const method of Object.keys(map)) {
+          res[method] = function (this: Block, ...args: never[]) {
+            // refuse to execute when it is called by Gandi collaboration system.
+            if (!(this instanceof Blockly.Block)) {
+              return
+            }
+            if (method === 'init') {
               // Prepatch (color, icon, etc.)
               prepatch(this)
             }
             const map = value.init(Blockly, this) as BlockMap
-            return map[key].apply(window, args)
+            return map[method].apply(window, args)
           }
         }
       }

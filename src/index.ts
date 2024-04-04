@@ -76,6 +76,10 @@ import { LppBoundArg } from './impl/boundarg'
    */
   class LppExtension implements Scratch.Extension {
     /**
+     * Extension ID.
+     */
+    static id: string = 'lpp'
+    /**
      * Virtual machine instance.
      */
     readonly vm: VM
@@ -130,6 +134,7 @@ import { LppBoundArg } from './impl/boundarg'
         throw new Error('lpp cannot get Virtual Machine instance.')
       this.vm = virtualMachine
       this.extension = defineExtension(
+        LppExtension.id,
         color,
         this.vm.runtime,
         this.formatMessage.bind(this)
@@ -501,16 +506,10 @@ import { LppBoundArg } from './impl/boundarg'
     getInfo(): Scratch.Info {
       if (this.Blockly) this.extension.inject(this.Blockly)
       return {
-        id: 'lpp',
+        id: LppExtension.id,
         name: this.formatMessage('lpp.name'),
         color1: color,
-        blocks: this.extension.export(),
-        menus: {
-          dummy: {
-            acceptReporters: false,
-            items: []
-          }
-        }
+        blocks: this.extension.export()
       }
     }
     /**
@@ -596,26 +595,97 @@ import { LppBoundArg } from './impl/boundarg'
      * @returns Result.
      */
     binaryOp(
-      args: { lhs: unknown; op: string | number; rhs: unknown },
+      args: Record<string, unknown>,
       util: VM.BlockUtility
     ): Wrapper<LppValue> | Wrapper<LppReference> {
+      const { thread } = util
       this.util = util
-      try {
-        const lhs = Wrapper.unwrap(args.lhs)
-        const rhs = Wrapper.unwrap(args.rhs)
-        const res = (() => {
-          if (args.op === '.') {
+      // Original algorithm from: lpp C++ implementation
+      // Ported by: FurryR
+      class Operator {
+        get priority(): number {
+          return (
+            new Map<string, number>([
+              ['.', 18],
+              ['?.', 18],
+              ['**', 14],
+              ['*', 13],
+              ['/', 13],
+              ['%', 13],
+              ['+', 12],
+              ['-', 12],
+              ['<<', 11],
+              ['>>', 11],
+              ['>>>', 11],
+              ['<', 10],
+              ['<=', 10],
+              ['>', 10],
+              ['>=', 10],
+              ['in', 10],
+              ['instanceof', 10],
+              ['==', 9],
+              ['!=', 9],
+              ['&', 8],
+              ['^', 7],
+              ['|', 6],
+              ['&&', 5],
+              ['||', 4],
+              ['=', 2],
+              [',', 1]
+            ]).get(this.value) ?? -1
+          )
+        }
+        constructor(public value: string) {}
+      }
+      function intoRPN(input: (string | Operator | LppValue | LppReference)[]) {
+        const stack: Operator[] = []
+        const result: (string | Operator | LppValue | LppReference)[] = []
+        for (const value of input) {
+          if (!(value instanceof Operator)) {
+            result.push(value)
+          } else {
+            let op: Operator | undefined
+            while (
+              (op = stack[stack.length - 1]) &&
+              op.priority >= value.priority
+            ) {
+              result.push(op)
+              stack.pop()
+            }
+            stack.push(value)
+          }
+        }
+        let op: Operator | undefined
+        while ((op = stack.pop())) {
+          result.push(op)
+        }
+        return result
+      }
+      function evaluate(
+        expr: (string | Operator | LppValue | LppReference)[]
+      ): LppValue | LppReference | string {
+        function evaluateInternal(
+          op: string,
+          lhs: LppValue | LppReference | string,
+          rhs: LppValue | LppReference | string
+        ): LppValue | LppReference {
+          if (op === '.' || op === '?.') {
             if (lhs instanceof LppValue || lhs instanceof LppReference) {
+              if (
+                lhs instanceof LppConstant &&
+                lhs.value === null &&
+                op === '?.'
+              )
+                return new LppConstant(null)
               if (typeof rhs === 'string' || typeof rhs === 'number') {
-                return lhs.get(`${rhs}`)
+                const res = lhs.get(`${rhs}`)
+                return op === '?.' ? asValue(res) : res
               } else if (
                 rhs instanceof LppValue ||
                 rhs instanceof LppReference
               ) {
-                const n = asValue(rhs)
-                if (n instanceof LppConstant && n.value !== null) {
-                  return lhs.get(n.toString())
-                }
+                const res = lhs.get(String(asValue(rhs)))
+                return op === '?.' ? asValue(res) : res
               }
               throw new LppError('invalidIndex')
             }
@@ -624,10 +694,11 @@ import { LppBoundArg } from './impl/boundarg'
             (lhs instanceof LppValue || lhs instanceof LppReference) &&
             (rhs instanceof LppValue || rhs instanceof LppReference)
           ) {
-            switch (args.op) {
+            switch (op) {
               case '=':
               case '+':
               case '*':
+              case '**':
               case '==':
               case '!=':
               case '>':
@@ -646,7 +717,7 @@ import { LppBoundArg } from './impl/boundarg'
               case '|':
               case '^':
               case 'instanceof': {
-                return lhs.calc(args.op, asValue(rhs))
+                return lhs.calc(op, asValue(rhs))
               }
               case 'in': {
                 const left = asValue(lhs)
@@ -660,7 +731,41 @@ import { LppBoundArg } from './impl/boundarg'
             }
           }
           throw new LppError('syntaxError')
-        })()
+        }
+        const stack: (string | LppValue | LppReference)[] = []
+        for (const value of expr) {
+          if (value instanceof Operator) {
+            const rhs = stack.pop()
+            const lhs = stack.pop()
+            if (lhs !== undefined && rhs !== undefined) {
+              stack.push(evaluateInternal(value.value, lhs, rhs))
+            } else throw new Error('lpp: invalid expression')
+          } else stack.push(value)
+        }
+        const res = stack.pop()
+        if (res === undefined) throw new Error('lpp: invalid expression')
+        return res
+      }
+      try {
+        const token: (string | Operator | LppValue | LppReference)[] = []
+        const block = this.getActiveBlockInstance(args, thread)
+        const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
+        for (let i = 0; i < len; i++) {
+          const op = args[`OP_${i}`]
+          const value = Wrapper.unwrap(args[`ARG_${i}`])
+          if (typeof op === 'string') {
+            token.push(new Operator(op))
+          }
+          token.push(
+            value instanceof LppValue ||
+              value instanceof LppReference ||
+              typeof value === 'string'
+              ? value
+              : String(value)
+          )
+        }
+        const res = evaluate(intoRPN(token))
+        if (typeof res === 'string') throw new Error('lpp: invalid expression')
         return new Wrapper(res)
       } catch (e) {
         this.handleError(e)
@@ -1628,7 +1733,7 @@ import { LppBoundArg } from './impl/boundarg'
       info: {
         name: 'lpp.name',
         description: 'lpp.desc',
-        extensionId: 'lpp',
+        extensionId: LppExtension.id,
         iconURL: icon,
         featured: true,
         disabled: false,

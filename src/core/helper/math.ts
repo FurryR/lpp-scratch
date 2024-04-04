@@ -17,6 +17,7 @@ export function mathOp(lhs: LppValue, op: string, rhs: LppValue): JSConstant {
     ['+', (a, b) => a + b],
     ['-', (a, b) => a - b],
     ['*', (a, b) => a * b],
+    ['**', (a, b) => a ** b],
     ['/', (a, b) => a / b],
     ['<<', (a, b) => a << b],
     ['>>', (a, b) => a >> b],
@@ -36,14 +37,14 @@ export function mathOp(lhs: LppValue, op: string, rhs: LppValue): JSConstant {
  * @returns Result.
  */
 export function equal(lhs: LppValue, rhs: LppValue): boolean {
-  lhs =
-    lhs instanceof LppConstant && typeof lhs.value === 'boolean'
-      ? new LppConstant(+lhs.value)
-      : lhs
-  rhs =
-    rhs instanceof LppConstant && typeof rhs.value === 'boolean'
-      ? new LppConstant(+rhs.value)
-      : rhs
+  // lhs =
+  //   lhs instanceof LppConstant && typeof lhs.value === 'boolean'
+  //     ? new LppConstant(+lhs.value)
+  //     : lhs
+  // rhs =
+  //   rhs instanceof LppConstant && typeof rhs.value === 'boolean'
+  //     ? new LppConstant(+rhs.value)
+  //     : rhs
   if (lhs instanceof LppConstant && rhs instanceof LppConstant)
     return lhs.value === rhs.value // patch: compare by value when using LppConstant
   return lhs === rhs

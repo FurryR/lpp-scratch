@@ -159,6 +159,7 @@ export class LppArray extends LppValue {
         }
         // (Pure) math operands
         case '-':
+        case '**':
         case '/':
         case '%':
         case '<<':
