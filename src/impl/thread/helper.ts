@@ -52,4 +52,5 @@ export function stepThread(
     runtime.sequencer.stepThread(callerThread) // restore compiler context (globalState)
     callerThread.generator = orig
   }
+  util.thread = callerThread
 }
