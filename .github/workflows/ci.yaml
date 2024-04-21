@@ -16,7 +16,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [latest]
+        node-version: [20]
         # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
 
     steps:
@@ -32,7 +32,7 @@ jobs:
       - name: 🛠️ Build lpp
         run: npm run build --if-present
       - name: ✅ Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: lpp
           path: dist/index.global.js
