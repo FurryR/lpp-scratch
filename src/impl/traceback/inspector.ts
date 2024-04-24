@@ -18,14 +18,14 @@ import { LppBoundArg } from '../boundarg'
  * Generate an inspector of specified object.
  * @param Blockly Blockly instance.
  * @param vm VM instance.
- * @param formatMessage Function to format message.
+ * @param translate Function to format message.
  * @param value The value to be inspected.
  * @returns Element.
  */
 export function Inspector(
   Blockly: BlocklyInstance | undefined,
   vm: VM,
-  formatMessage: (id: string) => string,
+  translate: typeof Scratch.translate,
   value: LppValue | LppBoundArg
 ): HTMLSpanElement {
   /**
@@ -92,7 +92,7 @@ export function Inspector(
               ),
         Dialog.Text(` ➡️ `)
       )
-      subelem.append(Inspector(Blockly, vm, formatMessage, value))
+      subelem.append(Inspector(Blockly, vm, translate, value))
       return subelem
     }
     const metadata =
@@ -160,9 +160,11 @@ export function Inspector(
         traceback.classList.add('lpp-traceback-stack-enabled')
         const { sprite, blocks } = value.metadata
         traceback.textContent = blocks[1]
-        traceback.title = formatMessage(
-          'lpp.tooltip.button.scrollToBlockEnabled'
-        )
+        traceback.title = translate({
+          id: 'lpp.tooltip.button.scrollToBlockEnabled',
+          default: 'Scroll to this block.',
+          description: 'Scroll button text.'
+        })
         traceback.addEventListener('click', () => {
           const box =
             Blockly.DropDownDiv.getContentDiv().getElementsByClassName(
@@ -210,8 +212,16 @@ export function Inspector(
   ) {
     let v: HTMLUListElement | undefined
     const btn = ExtendIcon(
-      formatMessage('lpp.tooltip.button.help.more'),
-      formatMessage('lpp.tooltip.button.help.less'),
+      translate({
+        id: 'lpp.tooltip.button.help.more',
+        default: 'Show detail.',
+        description: 'Show detail button.'
+      }),
+      translate({
+        id: 'lpp.tooltip.button.help.less',
+        default: 'Hide detail.',
+        description: 'Hide detail button.'
+      }),
       () => {
         if (!v) span.appendChild((v = objView(value)))
         else v.style.display = 'block'
@@ -246,7 +256,11 @@ export function Inspector(
     ) {
       const workspace = Blockly.getMainWorkspace() as ScratchBlocks.WorkspaceSvg
       const { sprite, blocks } = value.metadata
-      code.title = formatMessage('lpp.tooltip.button.scrollToBlockEnabled')
+      code.title = translate({
+        id: 'lpp.tooltip.button.scrollToBlockEnabled',
+        default: 'Scroll to this block.',
+        description: 'Scroll button text.'
+      })
       code.classList.add('lpp-traceback-stack-enabled')
       code.addEventListener('click', () => {
         const box =

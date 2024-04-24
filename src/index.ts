@@ -11,7 +11,6 @@ import {
   VM,
   TargetConstructor
 } from './impl/typing'
-import icon from './impl/asset/icon'
 import type * as ScratchBlocks from 'blockly/core'
 import {
   asValue,
@@ -37,7 +36,7 @@ import {
 } from './core'
 import { version, developers } from '../package.json'
 import * as Core from './core'
-import locale from './impl/l10n'
+// import locale from './impl/l10n'
 import { Dialog, Inspector, warnError, warnException } from './impl/traceback'
 import { BlocklyInstance, Extension } from './impl/blockly'
 import { defineExtension } from './impl/block'
@@ -71,6 +70,62 @@ import { LppBoundArg } from './impl/boundarg'
     Function.prototype.apply = _orig
     return result
   }
+  function getVM(runtime: LppCompatibleRuntime): VM {
+    let virtualMachine: VM | undefined
+    if (runtime._events['QUESTION'] instanceof Array) {
+      for (const value of runtime._events['QUESTION']) {
+        const v = hijack(value) as
+          | {
+              props?: {
+                vm?: VM
+              }
+            }
+          | undefined
+        if (v?.props?.vm) {
+          virtualMachine = v?.props?.vm as VM | undefined
+          break
+        }
+      }
+    } else if (runtime._events['QUESTION']) {
+      virtualMachine = (
+        hijack(runtime._events['QUESTION']) as
+          | {
+              props?: {
+                vm?: VM
+              }
+            }
+          | undefined
+      )?.props?.vm as VM | undefined
+    }
+    if (!virtualMachine)
+      throw new Error('lpp cannot get Virtual Machine instance.')
+    return virtualMachine
+  }
+  function getBlockly(vm: VM): BlocklyInstance | undefined {
+    let Blockly: BlocklyInstance | undefined
+    if (vm._events['EXTENSION_ADDED'] instanceof Array) {
+      for (const value of vm._events['EXTENSION_ADDED']) {
+        const v = hijack(value) as
+          | {
+              ScratchBlocks?: BlocklyInstance
+            }
+          | undefined
+        if (v?.ScratchBlocks) {
+          Blockly = v?.ScratchBlocks
+          break
+        }
+      }
+    } else if (vm._events['EXTENSION_ADDED']) {
+      Blockly = (
+        hijack(vm._events['EXTENSION_ADDED']) as
+          | {
+              ScratchBlocks?: BlocklyInstance
+            }
+          | undefined
+      )?.ScratchBlocks
+    }
+    return Blockly
+  }
   /**
    * The extension class.
    */
@@ -86,7 +141,7 @@ import { LppBoundArg } from './impl/boundarg'
     /**
      * ScratchBlocks instance.
      */
-    readonly Blockly?: BlocklyInstance
+    Blockly?: BlocklyInstance
     /**
      * Blockly extension.
      */
@@ -100,69 +155,7 @@ import { LppBoundArg } from './impl/boundarg'
      * @param originalRuntime Scratch runtime.
      */
     constructor(originalRuntime: VM.Runtime) {
-      const runtime = originalRuntime as LppCompatibleRuntime
-      this.Blockly = undefined
-      Scratch.translate.setup(locale)
-      // step 1: get virtual machine instance
-      let virtualMachine: VM | undefined
-      if (runtime._events['QUESTION'] instanceof Array) {
-        for (const value of runtime._events['QUESTION']) {
-          const v = hijack(value) as
-            | {
-                props?: {
-                  vm?: VM
-                }
-              }
-            | undefined
-          if (v?.props?.vm) {
-            virtualMachine = v?.props?.vm as VM | undefined
-            break
-          }
-        }
-      } else if (runtime._events['QUESTION']) {
-        virtualMachine = (
-          hijack(runtime._events['QUESTION']) as
-            | {
-                props?: {
-                  vm?: VM
-                }
-              }
-            | undefined
-        )?.props?.vm as VM | undefined
-      }
-      if (!virtualMachine)
-        throw new Error('lpp cannot get Virtual Machine instance.')
-      this.vm = virtualMachine
-      this.extension = defineExtension(
-        LppExtension.id,
-        color,
-        this.vm.runtime,
-        this.formatMessage.bind(this)
-      )
-      // step 2: get ScratchBlocks instance
-      if (this.vm._events['EXTENSION_ADDED'] instanceof Array) {
-        for (const value of this.vm._events['EXTENSION_ADDED']) {
-          const v = hijack(value) as
-            | {
-                ScratchBlocks?: BlocklyInstance
-              }
-            | undefined
-          if (v?.ScratchBlocks) {
-            this.Blockly = v?.ScratchBlocks
-            break
-          }
-        }
-      } else if (this.vm._events['EXTENSION_ADDED']) {
-        this.Blockly = (
-          hijack(this.vm._events['EXTENSION_ADDED']) as
-            | {
-                ScratchBlocks?: BlocklyInstance
-              }
-            | undefined
-        )?.ScratchBlocks
-      }
-      if (this.Blockly) {
-        const Blockly = this.Blockly
+      function patchBlockly(Blockly: BlocklyInstance, extension: Extension) {
         const Events = Blockly.Events as unknown as {
           Change: BlocklyInstance['Events']['Abstract']
           Create: BlocklyInstance['Events']['Abstract']
@@ -209,7 +202,29 @@ import { LppBoundArg } from './impl/boundarg'
           self.ids = res
           _Create.call(this, _forward)
         }
+        extension.inject(Blockly)
       }
+      const runtime = originalRuntime as LppCompatibleRuntime
+      this.Blockly = undefined
+      // step 1: get virtual machine instance
+      this.vm = getVM(runtime)
+      this.extension = defineExtension(
+        LppExtension.id,
+        color,
+        this.vm.runtime,
+        Scratch.translate
+      )
+      // step 2: get ScratchBlocks instance
+      this.Blockly = getBlockly(this.vm)
+      if (this.Blockly) patchBlockly(this.Blockly, this.extension)
+      else
+        this.vm.once('workspaceUpdate', () => {
+          const newBlockly = getBlockly(this.vm)
+          if (newBlockly && newBlockly !== this.Blockly) {
+            this.Blockly = newBlockly
+            patchBlockly(newBlockly, this.extension)
+          }
+        })
       // Ignore SAY and QUESTION calls on dummy target.
       const _emit = runtime.emit
       runtime.emit = (event: string, ...args: unknown[]) => {
@@ -244,14 +259,7 @@ import { LppBoundArg } from './impl/boundarg'
           Dialog.show(
             this.Blockly as BlocklyInstance,
             blockId,
-            [
-              Inspector(
-                this.Blockly,
-                this.vm,
-                this.formatMessage.bind(this),
-                actualValue
-              )
-            ],
+            [Inspector(this.Blockly, this.vm, Scratch.translate, actualValue)],
             actualValue instanceof LppConstant ? 'center' : 'left'
           )
         } else {
@@ -273,7 +281,7 @@ import { LppBoundArg } from './impl/boundarg'
               const inspector = Inspector(
                 this.Blockly,
                 this.vm,
-                this.formatMessage.bind(this),
+                Scratch.translate,
                 value
               )
               valueElement.style.textAlign = 'left'
@@ -467,47 +475,69 @@ import { LppBoundArg } from './impl/boundarg'
         version
       }
       console.groupCollapsed('💫 lpp', version)
-      console.log('🌟', this.formatMessage('lpp.about.summary'))
+      console.log(
+        '🌟',
+        Scratch.translate({
+          id: 'lpp.about.summary',
+          default:
+            'lpp is a high-level programming language developed by @FurryR.',
+          description: 'Extension summary.'
+        })
+      )
       console.log(
         '🤖',
-        this.formatMessage('lpp.about.github'),
+        Scratch.translate({
+          id: 'lpp.about.github',
+          default: 'GitHub repository',
+          description: 'GitHub repository hint.'
+        }),
         '-> https://github.com/FurryR/lpp-scratch'
       )
       console.log(
         '💞',
-        this.formatMessage('lpp.about.afdian'),
+        Scratch.translate({
+          id: 'lpp.about.afdian',
+          default: 'Sponsor',
+          description: 'Sponsor hint.'
+        }),
         '-> https://afdian.net/a/FurryR'
       )
-      console.group('👾', this.formatMessage('lpp.about.staff.1'))
+      console.group(
+        '👾',
+        Scratch.translate({
+          id: 'lpp.about.staff.1',
+          default: 'lpp developers staff',
+          description: 'Staff list.'
+        })
+      )
       for (const v of developers) {
         console.log(v)
       }
-      console.log('🥰', this.formatMessage('lpp.about.staff.2'))
+      console.log(
+        '🥰',
+        Scratch.translate({
+          id: 'lpp.about.staff.2',
+          default: "lpp won't be created without their effort.",
+          description: 'Staff list ending.'
+        })
+      )
       console.groupEnd()
       console.groupEnd()
     }
 
     /**
-     * Multi-language formatting support.
-     * @param id key of the translation.
-     * @returns Formatted string.
-     */
-    formatMessage(id: string): string {
-      return Scratch.translate({
-        id,
-        default: id,
-        description: id
-      })
-    }
-    /**
      * Get extension info.
      * @returns Extension info.
      */
     getInfo(): Scratch.Info {
-      if (this.Blockly) this.extension.inject(this.Blockly)
+      // if (this.Blockly) this.extension.inject(this.Blockly)
       return {
         id: LppExtension.id,
-        name: this.formatMessage('lpp.name'),
+        name: Scratch.translate({
+          id: 'lpp.name',
+          default: 'lpp',
+          description: 'Extension name.'
+        }),
         color1: color,
         blocks: this.extension.export()
       }
@@ -516,7 +546,13 @@ import { LppBoundArg } from './impl/boundarg'
      * Opens documentation.
      */
     documentation() {
-      window.open(this.formatMessage('lpp.documentation.url'))
+      window.open(
+        Scratch.translate({
+          id: 'lpp.documentation.url',
+          default: 'https://github.com/FurryR/lpp-scratch/blob/main/README.md',
+          description: 'Documentation URL.'
+        })
+      )
     }
     /**
      * Builtin types.
@@ -1476,7 +1512,7 @@ import { LppBoundArg } from './impl/boundarg'
             warnError(
               this.Blockly,
               this.vm,
-              this.formatMessage.bind(this),
+              Scratch.translate,
               e.id,
               stack,
               thread.target.sprite.clones[0].id
@@ -1492,7 +1528,7 @@ import { LppBoundArg } from './impl/boundarg'
      * @param e LppException object.
      */
     private handleException(e: LppException): never {
-      warnException(this.Blockly, this.vm, this.formatMessage.bind(this), e)
+      warnException(this.Blockly, this.vm, Scratch.translate, e)
       this.vm.runtime.stopAll()
       throw new Error('lpp: user exception')
     }
@@ -1724,42 +1760,5 @@ import { LppBoundArg } from './impl/boundarg'
       return ffi.fromObject(info)
     }
   }
-  if (Scratch.vm?.runtime) {
-    Scratch.extensions.register(new LppExtension(Scratch.vm.runtime))
-  } else {
-    // Compatible with CCW
-    Reflect.set(window, 'tempExt', {
-      Extension: LppExtension,
-      info: {
-        name: 'lpp.name',
-        description: 'lpp.desc',
-        extensionId: LppExtension.id,
-        iconURL: icon,
-        featured: true,
-        disabled: false,
-        collaboratorList: [
-          {
-            collaborator: '熊谷 凌',
-            collaboratorURL: 'https://github.com/FurryR'
-          },
-          {
-            collaborator: '...',
-            collaboratorURL: 'https://github.com/FurryR/lpp-scratch'
-          }
-        ]
-      },
-      // CCW doesn't support languages like ja-jp, so we do not need to add other translations.
-      l10n: {
-        'zh-cn': {
-          'lpp.name': 'lpp',
-          'lpp.desc': '🛠️ (实验性) 一门基于 Scratch 的高级编程语言。'
-        },
-        en: {
-          'lpp.name': 'lpp',
-          'lpp.desc':
-            '🛠️ (Experimental) A high-level programming language based on Scratch'
-        }
-      }
-    })
-  }
+  Scratch.extensions.register(new LppExtension(Scratch.vm.runtime))
 })(Scratch)

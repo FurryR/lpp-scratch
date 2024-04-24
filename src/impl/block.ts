@@ -384,14 +384,14 @@ const minusImage =
  * Defines extension.
  * @param color Extension color.
  * @param runtime Runtime Blockly.
- * @param formatMessage Function to format message.
+ * @param translate Function to format message.
  * @returns Extension.
  */
 export function defineExtension(
   id: string,
   color: string,
   runtime: VM.Runtime,
-  formatMessage: (id: string) => string
+  translate: typeof Scratch.translate
 ): Extension {
   /**
    * Generates plus icon.
@@ -540,16 +540,27 @@ export function defineExtension(
       /// Documentation
       new Button(
         'documentation',
-        () => `📄 ${formatMessage('lpp.documentation')}`
+        () =>
+          `📄 ${translate({ id: 'lpp.documentation', default: 'Open documentation', description: 'Documentation button.' })}`
       )
     )
     .register(
       /// Builtin
-      new Category(() => `#️⃣ ${formatMessage('lpp.category.builtin')}`)
+      new Category(
+        () =>
+          `#️⃣ ${translate({ id: 'lpp.category.builtin', default: 'Builtin', description: 'Builtin category.' })}`
+      )
         .register(
           'builtinType',
           Reporter.Round((Blockly, block) => () => {
-            block.setTooltip(formatMessage('lpp.tooltip.builtin.type'))
+            block.setTooltip(
+              translate({
+                id: 'lpp.tooltip.builtin.type',
+                default:
+                  'Predefined builtin data types. Includes everything which language feature requires.',
+                description: 'Builtin types tooltip.'
+              })
+            )
             block.appendDummyInput().appendField(
               new Blockly.FieldDropdown([
                 ['Boolean', 'Boolean'],
@@ -567,7 +578,14 @@ export function defineExtension(
         .register(
           'builtinError',
           Reporter.Round((Blockly, block) => () => {
-            block.setTooltip(formatMessage('lpp.tooltip.builtin.error'))
+            block.setTooltip(
+              translate({
+                id: 'lpp.tooltip.builtin.error',
+                default:
+                  'Predefined builtin error types. Includes all errors which builtin classes throw.',
+                description: 'Builtin errors tooltip.'
+              })
+            )
             block.appendDummyInput().appendField(
               new Blockly.FieldDropdown([
                 ['Error', 'Error'],
@@ -581,7 +599,14 @@ export function defineExtension(
         .register(
           'builtinUtility',
           Reporter.Round((Blockly, block) => () => {
-            block.setTooltip(formatMessage('lpp.tooltip.builtin.error'))
+            block.setTooltip(
+              translate({
+                id: 'lpp.tooltip.builtin.utility',
+                default:
+                  'Predefined builtin utility types. Includes methods to process data.',
+                description: 'Builtin utilities tooltip.'
+              })
+            )
             block.appendDummyInput().appendField(
               new Blockly.FieldDropdown([
                 ['JSON', 'JSON'],
@@ -594,11 +619,20 @@ export function defineExtension(
     )
     .register(
       /// Construct
-      new Category(() => `🚧 ${formatMessage('lpp.category.construct')}`)
+      new Category(
+        () =>
+          `🚧 ${translate({ id: 'lpp.category.construct', default: 'Construction', description: 'Construction category.' })}`
+      )
         .register(
           'constructLiteral',
           Reporter.Round((Blockly, block) => () => {
-            block.setTooltip(formatMessage('lpp.tooltip.construct.literal'))
+            block.setTooltip(
+              translate({
+                id: 'lpp.tooltip.construct.literal',
+                default: 'Construct special literals in lpp.',
+                description: 'Literal tooltip.'
+              })
+            )
             block.appendDummyInput().appendField(
               new Blockly.FieldDropdown([
                 ['null', 'null'],
@@ -614,9 +648,19 @@ export function defineExtension(
         .register(
           'constructNumber',
           Reporter.Square((_, block) => () => {
-            block.setTooltip(formatMessage('lpp.tooltip.construct.Number'))
+            block.setTooltip(
+              translate({
+                id: 'lpp.tooltip.construct.Number',
+                default: 'Construct a Number object by Scratch literal.',
+                description: 'Number constructor tooltip.'
+              })
+            )
             Input.Text(block, 'BEGIN', [
-              formatMessage('lpp.block.construct.Number'),
+              translate({
+                id: 'lpp.block.construct.Number',
+                default: 'Number',
+                description: 'Number constructor block.'
+              }),
               '('
             ])
             Input.String(block, 'value', '10')
@@ -626,9 +670,19 @@ export function defineExtension(
         .register(
           'constructString',
           Reporter.Square((_, block) => () => {
-            block.setTooltip(formatMessage('lpp.tooltip.construct.String'))
+            block.setTooltip(
+              translate({
+                id: 'lpp.tooltip.construct.String',
+                default: 'Construct a String object by Scratch literal.',
+                description: 'String constructor tooltip.'
+              })
+            )
             Input.Text(block, 'BEGIN', [
-              formatMessage('lpp.block.construct.String'),
+              translate({
+                id: 'lpp.block.construct.String',
+                default: 'String',
+                description: 'String constructor block.'
+              }),
               '('
             ])
             Input.String(block, 'value', '🌟')
@@ -639,7 +693,14 @@ export function defineExtension(
           'constructArray',
           Reporter.Square((Blockly, block) => ({
             init() {
-              block.setTooltip(formatMessage('lpp.tooltip.construct.Array'))
+              block.setTooltip(
+                translate({
+                  id: 'lpp.tooltip.construct.Array',
+                  default:
+                    'Construct an Array object with specified structure. Use "+" to add or "-" to remove an element.',
+                  description: 'Array constructor tooltip.'
+                })
+              )
               const property = block as MutableBlock
               Input.Text(block, 'BEGIN', '[')
               /// Member
@@ -688,7 +749,14 @@ export function defineExtension(
           'constructObject',
           Reporter.Square((Blockly, block) => ({
             init() {
-              block.setTooltip(formatMessage('lpp.tooltip.construct.Object'))
+              block.setTooltip(
+                translate({
+                  id: 'lpp.tooltip.construct.Object',
+                  default:
+                    'Construct an Object object with specified structure. Use "+" to add or "-" to remove an element.',
+                  description: 'Object constructor tooltip.'
+                })
+              )
               const property = block as MutableBlock
               Input.Text(block, 'BEGIN', '{')
               /// Member
@@ -748,10 +816,21 @@ export function defineExtension(
           'constructFunction',
           Reporter.Square((Blockly, block) => ({
             init() {
-              block.setTooltip(formatMessage('lpp.tooltip.construct.Function'))
+              block.setTooltip(
+                translate({
+                  id: 'lpp.tooltip.construct.Function',
+                  default:
+                    'Construct an Function object. Use "+" to add or "-" to remove an argument.',
+                  description: 'Function constructor tooltip.'
+                })
+              )
               const property = block as MutableBlock
               Input.Text(block, 'BEGIN', [
-                formatMessage('lpp.block.construct.Function'),
+                translate({
+                  id: 'lpp.block.construct.Function',
+                  default: 'function',
+                  description: 'Function constructor block.'
+                }),
                 '('
               ])
               /// Signature
@@ -802,11 +881,20 @@ export function defineExtension(
           Reporter.Square((Blockly, block) => ({
             init() {
               block.setTooltip(
-                formatMessage('lpp.tooltip.construct.AsyncFunction')
+                translate({
+                  id: 'lpp.tooltip.construct.AsyncFunction',
+                  default:
+                    'Construct an asynchronous Function object. Use "+" to add or "-" to remove an argument.',
+                  description: 'Asynchronous function constructor tooltip.'
+                })
               )
               const property = block as MutableBlock
               Input.Text(block, 'BEGIN', [
-                formatMessage('lpp.block.construct.AsyncFunction'),
+                translate({
+                  id: 'lpp.block.construct.AsyncFunction',
+                  default: 'async function',
+                  description: 'Asynchronous function constructor block.'
+                }),
                 '('
               ])
               /// Signature
@@ -854,12 +942,21 @@ export function defineExtension(
         )
     )
     .register(
-      new Category(() => `🔢 ${formatMessage('lpp.category.operator')}`)
+      new Category(
+        () =>
+          `🔢 ${translate({ id: 'lpp.category.operator', default: 'Operator', description: 'Operator category.' })}`
+      )
         .register(
           'binaryOp',
           Reporter.Square((Blockly, block) => ({
             init() {
-              block.setTooltip(formatMessage('lpp.tooltip.operator.binaryOp'))
+              block.setTooltip(
+                translate({
+                  id: 'lpp.tooltip.operator.binaryOp',
+                  default: 'Do binary operations.',
+                  description: 'Binary operations tooltip.'
+                })
+              )
               // Input.String(block, 'lhs', '')
               // block.appendDummyInput().appendField(
               //   new Blockly.FieldDropdown([
@@ -980,7 +1077,13 @@ export function defineExtension(
         .register(
           'unaryOp',
           Reporter.Square((Blockly, block) => () => {
-            block.setTooltip(formatMessage('lpp.tooltip.operator.unaryOp'))
+            block.setTooltip(
+              translate({
+                id: 'lpp.tooltip.operator.unaryOp',
+                default: 'Do unary operations.',
+                description: 'Unary operations tooltip.'
+              })
+            )
             block.appendDummyInput().appendField(
               new Blockly.FieldDropdown([
                 ['+', '+'],
@@ -1002,7 +1105,14 @@ export function defineExtension(
           'new',
           Reporter.Square((Blockly, block) => ({
             init() {
-              block.setTooltip(formatMessage('lpp.tooltip.operator.new'))
+              block.setTooltip(
+                translate({
+                  id: 'lpp.tooltip.operator.new',
+                  default:
+                    'Construct an instance with given constructor and arguments. Use "+" to add or "-" to remove an argument.',
+                  description: 'New operator tooltip.'
+                })
+              )
               const property = block as MutableBlock
               Input.Text(block, 'LABEL', 'new')
               Input.Any(block, 'fn')
@@ -1053,7 +1163,14 @@ export function defineExtension(
           'call',
           Reporter.Square((Blockly, block) => ({
             init() {
-              block.setTooltip(formatMessage('lpp.tooltip.operator.call'))
+              block.setTooltip(
+                translate({
+                  id: 'lpp.tooltip.operator.call',
+                  default:
+                    'Call function with given arguments. Use "+" to add or "-" to remove an argument.',
+                  description: 'Call operator tooltip.'
+                })
+              )
               const property = block as MutableBlock
               Input.Any(block, 'fn')
               Input.Text(block, 'BEGIN', '(')
@@ -1102,32 +1219,59 @@ export function defineExtension(
         .register(
           'self',
           Reporter.Round((_, block) => () => {
-            block.setTooltip(formatMessage('lpp.tooltip.operator.self'))
+            block.setTooltip(
+              translate({
+                id: 'lpp.tooltip.operator.self',
+                default:
+                  'Get the reference of self object in function context.',
+                description: 'Self (aka this) tooltip.'
+              })
+            )
             block.setCheckboxInFlyout(false)
-            Input.Text(block, 'LABEL', formatMessage('lpp.block.operator.self'))
+            Input.Text(block, 'LABEL', 'this')
           })
         )
         .register(
           'var',
           Reporter.Round((_, block) => () => {
-            block.setTooltip(formatMessage('lpp.tooltip.operator.var'))
-            Input.Text(block, 'LABEL', formatMessage('lpp.block.operator.var'))
+            block.setTooltip(
+              translate({
+                id: 'lpp.tooltip.operator.var',
+                default:
+                  'Get the reference of a specified local variable or an argument.',
+                description: 'Variable operator tooltip.'
+              })
+            )
+            Input.Text(
+              block,
+              'LABEL',
+              translate({
+                id: 'lpp.block.operator.var',
+                default: 'var',
+                description: 'Var operator block.'
+              })
+            )
             Input.String(block, 'name', '🐺')
           })
         )
     )
     .register(
-      new Category(() => `🤖 ${formatMessage('lpp.category.statement')}`)
+      new Category(
+        () =>
+          `🤖 ${translate({ id: 'lpp.category.statement', default: 'Statement', description: 'Statement category.' })}`
+      )
         .register(
           'return',
           Command(
             (_, block) => () => {
-              block.setTooltip(formatMessage('lpp.tooltip.statement.return'))
-              Input.Text(
-                block,
-                'LABEL',
-                formatMessage('lpp.block.statement.return')
+              block.setTooltip(
+                translate({
+                  id: 'lpp.tooltip.statement.return',
+                  default: 'Return a value from the function.',
+                  description: 'Return statement tooltip.'
+                })
               )
+              Input.Text(block, 'LABEL', 'return')
               Input.Any(block, 'value')
             },
             true
@@ -1137,12 +1281,15 @@ export function defineExtension(
           'throw',
           Command(
             (_, block) => () => {
-              block.setTooltip(formatMessage('lpp.tooltip.statement.throw'))
-              Input.Text(
-                block,
-                'LABEL',
-                formatMessage('lpp.block.statement.throw')
+              block.setTooltip(
+                translate({
+                  id: 'lpp.tooltip.statement.throw',
+                  default:
+                    'Throw a value. It will interrupt current control flow immediately.',
+                  description: 'Throw statement tooltip.'
+                })
               )
+              Input.Text(block, 'LABEL', 'throw')
               Input.Any(block, 'value')
             },
             true
@@ -1151,11 +1298,21 @@ export function defineExtension(
         .register(
           'scope',
           Command((_, block) => () => {
-            block.setTooltip(formatMessage('lpp.tooltip.statement.scope'))
+            block.setTooltip(
+              translate({
+                id: 'lpp.tooltip.statement.scope',
+                default: 'Create a lpp scope and execute the code in it.',
+                description: 'Scope statement tooltip.'
+              })
+            )
             Input.Text(
               block,
               'LABEL',
-              formatMessage('lpp.block.statement.scope')
+              translate({
+                id: 'lpp.block.statement.scope',
+                default: 'scope',
+                description: 'Scope statement block.'
+              })
             )
             Input.Statement(block, 'SUBSTACK')
           })
@@ -1163,14 +1320,17 @@ export function defineExtension(
         .register(
           'try',
           Command((_, block) => () => {
-            block.setTooltip(formatMessage('lpp.tooltip.statement.try'))
-            Input.Text(block, 'TRY', formatMessage('lpp.block.statement.try.1'))
-            Input.Statement(block, 'SUBSTACK')
-            Input.Text(
-              block,
-              'CATCH',
-              formatMessage('lpp.block.statement.try.2')
+            block.setTooltip(
+              translate({
+                id: 'lpp.tooltip.statement.try',
+                default:
+                  'Try capturing exceptions in specified statements. If an exception is thrown, set the specified reference to error object, then execute exception handling code.',
+                description: 'Try-catch statement tooltip.'
+              })
             )
+            Input.Text(block, 'TRY', 'try')
+            Input.Statement(block, 'SUBSTACK')
+            Input.Text(block, 'CATCH', 'catch')
             Input.Any(block, 'var')
             Input.Statement(block, 'SUBSTACK_2')
           })
@@ -1178,7 +1338,14 @@ export function defineExtension(
         .register(
           'nop',
           Command((_, block) => () => {
-            block.setTooltip(formatMessage('lpp.tooltip.statement.nop'))
+            block.setTooltip(
+              translate({
+                id: 'lpp.tooltip.statement.nop',
+                default:
+                  'Does nothing. It is used to convert a Scratch reporter into a statement.',
+                description: 'No-op block tooltip.'
+              })
+            )
             Input.Any(block, 'value')
           })
         )

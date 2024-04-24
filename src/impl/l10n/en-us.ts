@@ -13,13 +13,8 @@ export default {
   'lpp.block.construct.AsyncFunction': 'async function',
   /// Operator
   'lpp.block.operator.var': 'var',
-  'lpp.block.operator.self': 'this',
   /// Statement
-  'lpp.block.statement.return': 'return',
-  'lpp.block.statement.throw': 'throw',
   'lpp.block.statement.scope': 'scope',
-  'lpp.block.statement.try.1': 'try',
-  'lpp.block.statement.try.2': 'catch',
   // Error
   'lpp.error.useAfterDispose.summary':
     'Cannot operate sprite on a disposed target.',

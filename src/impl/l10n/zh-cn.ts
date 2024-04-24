@@ -13,13 +13,8 @@ export default {
   'lpp.block.construct.AsyncFunction': '异步函数',
   /// 运算符
   'lpp.block.operator.var': '变量',
-  'lpp.block.operator.self': '自身',
   /// 语句
-  'lpp.block.statement.return': '返回',
-  'lpp.block.statement.throw': '抛出',
   'lpp.block.statement.scope': '作用域',
-  'lpp.block.statement.try.1': '尝试',
-  'lpp.block.statement.try.2': '捕获',
   // 报错
   'lpp.error.useAfterDispose.summary': '无法在已销毁的目标上操作角色。',
   'lpp.error.useAfterDispose.detail':

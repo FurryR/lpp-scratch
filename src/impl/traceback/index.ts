@@ -118,7 +118,7 @@ export function showTraceback(svgRoot: SVGAElement) {
 export function warnError(
   Blockly: BlocklyInstance | undefined,
   vm: VM,
-  formatMessage: (id: string) => string,
+  translate: typeof Scratch.translate,
   error: string,
   id: string,
   target: string
@@ -139,14 +139,26 @@ export function warnError(
       [
         Dialog.IconGroup([
           Dialog.HelpIcon(
-            formatMessage('lpp.tooltip.button.help.more'),
-            formatMessage('lpp.tooltip.button.help.less'),
+            translate({
+              id: 'lpp.tooltip.button.help.more',
+              default: 'Show detail.',
+              description: 'Show detail button.'
+            }),
+            translate({
+              id: 'lpp.tooltip.button.help.less',
+              default: 'Hide detail.',
+              description: 'Hide detail button.'
+            }),
             () => {
               if (div) {
                 const v = div.getElementsByClassName('lpp-hint')[0]
                 if (v) {
                   original = v.textContent ?? ''
-                  v.textContent = `💡 ${formatMessage(`lpp.error.${error}.detail`)}`
+                  v.textContent = `💡 ${translate({
+                    id: `lpp.error.${error}.detail`,
+                    default: `Text [lpp.error.${error}.detail]`,
+                    description: 'Error detail message.'
+                  })}`
                 }
               }
             },
@@ -159,52 +171,110 @@ export function warnError(
               }
             }
           ),
-          Dialog.CloseIcon(Blockly, formatMessage('lpp.tooltip.button.close'))
+          Dialog.CloseIcon(
+            Blockly,
+            translate({
+              id: 'lpp.tooltip.button.close',
+              default: 'Close this hint.',
+              description: 'Close button.'
+            })
+          )
         ]),
-        Dialog.Title(`ℹ️ ${formatMessage(`lpp.error.${error}.summary`)}`),
+        Dialog.Title(
+          `ℹ️ ${translate({
+            id: `lpp.error.${error}.summary`,
+            default: `Text [lpp.error.${error}.summary]`,
+            description: 'Error summary message.'
+          })}`
+        ),
         document.createElement('br'),
-        Dialog.Text(`🔍 ${formatMessage('lpp.error.hint')}`, 'lpp-hint')
+        Dialog.Text(
+          `🔍 ${translate({ id: 'lpp.error.hint', default: 'For further information please check DevTools Console.', description: 'Open DevTools hint.' })}`,
+          'lpp-hint'
+        )
       ],
       'left'
     )
     if (!div) {
       notificationAlert({
-        title: `❌ ${formatMessage(`lpp.error.${error}.summary`)}`,
-        body: `📌 ${formatMessage(
-          'lpp.error.position'
-        )} ${id}\n🔍 ${formatMessage('lpp.error.hint')}`,
+        title: `❌ ${translate({
+          id: `lpp.error.${error}.summary`,
+          default: `Text [lpp.error.${error}.summary]`,
+          description: 'Error summary message.'
+        })}`,
+        body: `📌 ${translate({
+          id: 'lpp.error.position',
+          default: 'Position:',
+          description: 'Position indicator.'
+        })} ${id}\n🔍 ${translate({ id: 'lpp.error.hint', default: 'For further information please check DevTools Console.', description: 'Open DevTools hint.' })}`,
         tag: 'lppError',
         silent: false
       })
     }
   } else {
     notificationAlert({
-      title: `❌ ${formatMessage('lpp.error.releaseMode.summary')}`,
-      body: `ℹ️ ${formatMessage(
-        'lpp.error.releaseMode.detail'
-      )}\n🔍 ${formatMessage('lpp.error.hint')}`,
+      title: `❌ ${translate({ id: 'lpp.error.releaseMode.summary', default: 'The code encountered an error while running.', description: 'Release mode error message.' })}`,
+      body: `ℹ️ ${translate({
+        id: 'lpp.error.releaseMode.detail',
+        default:
+          'The program may not work as intended. Please contact project maintainers with this message for help.',
+        description: 'Release mode error hint.'
+      })}\n🔍 ${translate({ id: 'lpp.error.hint', default: 'For further information please check DevTools Console.', description: 'Open DevTools hint.' })}`,
       tag: 'lppError',
       silent: true
     })
   }
-  console.groupCollapsed(`❌ ${formatMessage(`lpp.error.${error}.summary`)}`)
+  console.groupCollapsed(
+    `❌ ${translate({
+      id: `lpp.error.${error}.summary`,
+      default: `Text [lpp.error.${error}.summary]`,
+      description: 'Error summary message.'
+    })}`
+  )
   if (Blockly) {
-    console.log(`💡 ${formatMessage(`lpp.error.${error}.detail`)}`)
+    console.log(
+      `💡 ${translate({
+        id: `lpp.error.${error}.detail`,
+        default: `Text [lpp.error.${error}.detail]`,
+        description: 'Error detail message.'
+      })}`
+    )
     const block = Blockly.getMainWorkspace()?.getBlockById(id) as unknown as
       | { getSvgRoot: () => SVGAElement }
       | undefined
     const svgRoot = block?.getSvgRoot()
-    console.groupCollapsed(`📌 ${formatMessage('lpp.error.position')} ${id}`)
+    console.groupCollapsed(
+      `📌 ${translate({
+        id: 'lpp.error.position',
+        default: 'Position:',
+        description: 'Position indicator.'
+      })} ${id}`
+    )
     if (svgRoot) {
       showTraceback(svgRoot)
       console.log(svgRoot)
     } else {
-      console.log(`❓ ${formatMessage('lpp.error.blockNotFound')}`)
+      console.log(
+        `❓ ${translate({ id: 'lpp.error.blockNotFound', default: 'Unable to find the block in Blockly workspace. The block might not belong to the target that you are currently editing.', description: 'Block not found hint.' })}`
+      )
     }
     console.groupEnd()
   } else {
-    console.log(`ℹ️ ${formatMessage('lpp.error.releaseMode.detail')}`)
-    console.log(`📌 ${formatMessage('lpp.error.position')} ${id}`)
+    console.log(
+      `ℹ️ ${translate({
+        id: 'lpp.error.releaseMode.detail',
+        default:
+          'The program may not work as intended. Please contact project maintainers with this message for help.',
+        description: 'Release mode error hint.'
+      })}`
+    )
+    console.log(
+      `📌 ${translate({
+        id: 'lpp.error.position',
+        default: 'Position:',
+        description: 'Position indicator.'
+      })} ${id}`
+    )
   }
   console.groupEnd()
 }
@@ -212,30 +282,37 @@ export function warnError(
  * Warn exception.
  * @param Blockly Blockly global instance.
  * @param vm VM instance.
- * @param formatMessage Function to format message.
+ * @param translate Function to format message.
  * @param exception Exception instance.
  */
 export function warnException(
   Blockly: BlocklyInstance | undefined,
   vm: VM,
-  formatMessage: (id: string) => string,
+  translate: typeof Scratch.translate,
   exception: LppException
 ) {
   if (Blockly) {
     const getTraceback = (): (Node | string)[] => {
       const text: (Node | string)[] = []
       text.push(
-        `💡 ${formatMessage(`lpp.error.uncaughtException.detail`)}`,
+        `💡 ${translate({
+          id: 'lpp.error.uncaughtException.detail',
+          default:
+            'Please use try-catch block to catch exceptions or the code will stop execution.',
+          description: 'Uncaught exception summary.'
+        })}`,
         document.createElement('br'),
         document.createElement('br')
       )
       text.push(
-        `🤔 ${formatMessage('lpp.error.uncaughtException.exception')}`,
+        `🤔 ${translate({ id: 'lpp.error.uncaughtException.exception', default: 'Exception:', description: 'Exception hint.' })}`,
         document.createElement('br'),
-        Inspector(Blockly, vm, formatMessage, exception.value), // TODO: Better design
+        Inspector(Blockly, vm, translate, exception.value), // TODO: Better design
         document.createElement('br')
       )
-      text.push(`👾 ${formatMessage('lpp.error.uncaughtException.traceback')}`)
+      text.push(
+        `👾 ${translate({ id: 'lpp.error.uncaughtException.traceback', default: 'Traceback:', description: 'Traceback hint.' })}`
+      )
       const list = document.createElement('ul')
       list.classList.add('lpp-list')
       for (const [index, value] of exception.stack.entries()) {
@@ -247,9 +324,11 @@ export function warnException(
             const workspace =
               Blockly.getMainWorkspace() as ScratchBlocks.WorkspaceSvg
             traceback.classList.add('lpp-traceback-stack-enabled')
-            traceback.title = formatMessage(
-              'lpp.tooltip.button.scrollToBlockEnabled'
-            )
+            traceback.title = translate({
+              id: 'lpp.tooltip.button.scrollToBlockEnabled',
+              default: 'Scroll to this block.',
+              description: 'Scroll button text.'
+            })
             traceback.addEventListener('click', () => {
               const box =
                 Blockly.DropDownDiv.getContentDiv().getElementsByClassName(
@@ -267,12 +346,19 @@ export function warnException(
             })
           } else {
             traceback.classList.add('lpp-traceback-stack-disabled')
-            traceback.title = formatMessage(
-              'lpp.tooltip.button.scrollToBlockDisabled'
-            )
+            traceback.title = translate({
+              id: 'lpp.tooltip.button.scrollToBlockDisabled',
+              default: 'Unable to find this block in project.',
+              description: 'Block not found (for serialized fn) hint.'
+            })
           }
         } else if (value instanceof LppTraceback.NativeFn) {
-          traceback.title = formatMessage('lpp.tooltip.button.nativeFn')
+          traceback.title = translate({
+            id: 'lpp.tooltip.button.nativeFn',
+            default:
+              'This is native function. For further information please check DevTools Console.',
+            description: 'Native function hint.'
+          })
         }
         traceback.textContent = value.toString()
         li.append(`📌 ${index} ➡️ `, traceback)
@@ -298,8 +384,16 @@ export function warnException(
           [
             Dialog.IconGroup([
               Dialog.HelpIcon(
-                formatMessage('lpp.tooltip.button.help.more'),
-                formatMessage('lpp.tooltip.button.help.less'),
+                translate({
+                  id: 'lpp.tooltip.button.help.more',
+                  default: 'Show detail.',
+                  description: 'Show detail button.'
+                }),
+                translate({
+                  id: 'lpp.tooltip.button.help.less',
+                  default: 'Hide detail.',
+                  description: 'Hide detail button.'
+                }),
                 () => {
                   if (div) {
                     const v = div.getElementsByClassName('lpp-hint')[0]
@@ -321,14 +415,21 @@ export function warnException(
               ),
               Dialog.CloseIcon(
                 Blockly,
-                formatMessage('lpp.tooltip.button.close')
+                translate({
+                  id: 'lpp.tooltip.button.close',
+                  default: 'Close this hint.',
+                  description: 'Close button.'
+                })
               )
             ]),
             Dialog.Title(
-              `ℹ️ ${formatMessage(`lpp.error.uncaughtException.summary`)}`
+              `ℹ️ ${translate({ id: 'lpp.error.uncaughtException.summary', default: 'Uncaught exception.', description: 'Uncaught exception hint.' })}`
             ),
             document.createElement('br'),
-            Dialog.Text(`🔍 ${formatMessage('lpp.error.hint')}`, 'lpp-hint')
+            Dialog.Text(
+              `🔍 ${translate({ id: 'lpp.error.hint', default: 'For further information please check DevTools Console.', description: 'Open DevTools hint.' })}`,
+              'lpp-hint'
+            )
           ],
           'left'
         )
@@ -338,35 +439,56 @@ export function warnException(
     }
     if (!flag)
       notificationAlert({
-        title: `❌ ${formatMessage('lpp.error.uncaughtException.summary')}`,
-        body: `💡 ${formatMessage(
-          'lpp.error.uncaughtException.detail'
-        )}\n🔍 ${formatMessage('lpp.error.hint')}`,
+        title: `❌ ${translate({ id: 'lpp.error.uncaughtException.summary', default: 'Uncaught exception.', description: 'Uncaught exception hint.' })}`,
+        body: `💡 ${translate({
+          id: 'lpp.error.uncaughtException.detail',
+          default:
+            'Please use try-catch block to catch exceptions or the code will stop execution.',
+          description: 'Uncaught exception summary.'
+        })}\n🔍 ${translate({ id: 'lpp.error.hint', default: 'For further information please check DevTools Console.', description: 'Open DevTools hint.' })}`,
         tag: 'lppError',
         silent: false
       })
   } else {
     notificationAlert({
-      title: `❌ ${formatMessage('lpp.error.releaseMode.summary')}`,
-      body: `ℹ️ ${formatMessage(
-        'lpp.error.releaseMode.detail'
-      )}\n🔍 ${formatMessage('lpp.error.hint')}`,
+      title: `❌ ${translate({ id: 'lpp.error.releaseMode.summary', default: 'The code encountered an error while running.', description: 'Release mode error message.' })}`,
+      body: `ℹ️ ${translate({
+        id: 'lpp.error.releaseMode.detail',
+        default:
+          'The program may not work as intended. Please contact project maintainers with this message for help.',
+        description: 'Release mode error hint.'
+      })}\n🔍 ${translate({ id: 'lpp.error.hint', default: 'For further information please check DevTools Console.', description: 'Open DevTools hint.' })}`,
       tag: 'lppError',
       silent: true
     })
   }
   console.groupCollapsed(
-    `❌ ${formatMessage('lpp.error.uncaughtException.summary')}`
+    `❌ ${translate({ id: 'lpp.error.uncaughtException.summary', default: 'Uncaught exception.', description: 'Uncaught exception hint.' })}`
   )
   if (Blockly)
-    console.log(`💡 ${formatMessage('lpp.error.uncaughtException.detail')}`)
-  else console.log(`ℹ️ ${formatMessage('lpp.error.releaseMode.detail')}`)
+    console.log(
+      `💡 ${translate({
+        id: 'lpp.error.uncaughtException.detail',
+        default:
+          'Please use try-catch block to catch exceptions or the code will stop execution.',
+        description: 'Uncaught exception summary.'
+      })}`
+    )
+  else
+    console.log(
+      `ℹ️ ${translate({
+        id: 'lpp.error.releaseMode.detail',
+        default:
+          'The program may not work as intended. Please contact project maintainers with this message for help.',
+        description: 'Release mode error hint.'
+      })}`
+    )
   console.log(
-    `🤔 ${formatMessage('lpp.error.uncaughtException.exception')}`,
+    `🤔 ${translate({ id: 'lpp.error.uncaughtException.exception', default: 'Exception:', description: 'Exception hint.' })}`,
     exception.value
   )
   console.groupCollapsed(
-    `👾 ${formatMessage('lpp.error.uncaughtException.traceback')}`
+    `👾 ${translate({ id: 'lpp.error.uncaughtException.traceback', default: 'Traceback:', description: 'Traceback hint.' })}`
   )
   for (const [idx, value] of exception.stack.entries()) {
     if (Blockly) {
@@ -380,15 +502,26 @@ export function warnException(
           showTraceback(svgRoot)
           console.log(svgRoot)
         } else {
-          console.log(`❓ ${formatMessage('lpp.error.blockNotFound')}`)
+          console.log(
+            `❓ ${translate({ id: 'lpp.error.blockNotFound', default: 'Unable to find the block in Blockly workspace. The block might not belong to the target that you are currently editing.', description: 'Block not found hint.' })}`
+          )
         }
         if (value.context)
-          console.log(`🛠️ ${formatMessage('lpp.error.context')}`, value.context)
+          console.log(
+            `🛠️ ${translate({ id: 'lpp.error.context', default: 'Context:', description: 'Context hint.' })}`,
+            value.context
+          )
         console.groupEnd()
       } else if (value instanceof LppTraceback.NativeFn) {
         console.groupCollapsed(`📌 ${idx + 1} ➡️`, value.fn)
-        console.log(`🛠️ ${formatMessage('lpp.error.self')}`, value.self)
-        console.log(`🛠️ ${formatMessage('lpp.error.arguments')}`, value.args)
+        console.log(
+          `🛠️ ${translate({ id: 'lpp.error.self', default: 'This:', description: 'Self object hint.' })}`,
+          value.self
+        )
+        console.log(
+          `🛠️ ${translate({ id: 'lpp.error.arguments', default: 'Arguments:', description: 'Arguments hint.' })}`,
+          value.args
+        )
         console.groupEnd()
       } else {
         console.log(`📌 ${idx + 1} ➡️`, value.toString())
