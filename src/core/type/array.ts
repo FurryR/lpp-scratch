@@ -30,9 +30,7 @@ export class LppArray extends LppValue {
           )
         const proto = asValue(constructor.get('prototype'))
         if (!(proto instanceof LppObject))
-          throw new Error(
-            'lpp: unexpected prototype -- must be a LppObject instance'
-          )
+          return new LppReference(this, key, new LppConstant(null))
         const member = lookupPrototype(proto, key)
         if (member === null) throw new LppError('invalidIndex')
         return new LppReference(this, key, member)
@@ -67,10 +65,7 @@ export class LppArray extends LppValue {
         'lpp: unexpected constructor -- must be a LppFunction instance'
       )
     const proto = asValue(constructor.get('prototype'))
-    if (!(proto instanceof LppObject))
-      throw new Error(
-        'lpp: unexpected prototype -- must be a LppObject instance'
-      )
+    if (!(proto instanceof LppObject)) return false
     return lookupPrototype(proto, key) !== null
   }
   /**

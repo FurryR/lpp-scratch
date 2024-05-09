@@ -1,4 +1,4 @@
-import { LppObject, LppValue, LppError } from '../type'
+import { LppObject, LppValue, LppFunction } from '../type'
 
 /**
  * Lookup for a property in prototype.
@@ -27,11 +27,14 @@ export function lookupPrototype(
         return res
       } else {
         // recursive
-        const v = proto.value.get('prototype')
-        if (v instanceof LppObject) {
-          if (cache.has(v)) throw new LppError('recursivePrototype')
-          else cache.add(v)
-          return lookupPrototype(v, name)
+        const constructor = proto.value.get('constructor')
+        if (constructor instanceof LppFunction) {
+          const v = proto.value.get('prototype')
+          if (v instanceof LppObject) {
+            if (cache.has(v)) return null
+            else cache.add(v)
+            return lookupPrototype(v, name)
+          }
         }
       }
     }
@@ -50,8 +53,9 @@ export function comparePrototype(
   prototype2: LppObject
 ): boolean {
   if (prototype1 === prototype2) return true
-  if (prototype1.value.has('prototype')) {
-    const v = prototype1.value.get('prototype')
+  const constructor1 = prototype1.value.get('constructor')
+  if (constructor1 && constructor1 instanceof LppFunction) {
+    const v = constructor1.value.get('prototype')
     // recursive
     if (v instanceof LppObject) return comparePrototype(v, prototype2)
   }

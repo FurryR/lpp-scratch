@@ -48,10 +48,7 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
           'lpp: unexpected constructor -- must be a LppFunction instance'
         )
       const proto = asValue(constructor.get('prototype'))
-      if (!(proto instanceof LppObject))
-        throw new Error(
-          'lpp: unexpected prototype -- must be a LppObject instance'
-        )
+      if (!(proto instanceof LppObject)) return new LppConstant(null)
       const member = lookupPrototype(proto, key)
       if (member === null) return new LppConstant(null)
       return new LppReference(this, key, member)
@@ -77,10 +74,7 @@ export class LppConstant<T extends JSConstant = JSConstant> extends LppValue {
         'lpp: unexpected constructor -- must be a LppFunction instance'
       )
     const proto = asValue(constructor.get('prototype'))
-    if (!(proto instanceof LppObject))
-      throw new Error(
-        'lpp: unexpected prototype -- must be a LppObject instance'
-      )
+    if (!(proto instanceof LppObject)) return false
     return lookupPrototype(proto, key) !== null
   }
   /**

@@ -15,6 +15,7 @@ export function attachType() {
   attachType(Global.String, ['value?'])
   attachType(Global.Array, ['value?'])
   attachType(Global.Object, ['value?'])
+  attachType(Global.Object.get('create'), ['proto'])
   attachType(Global.Function, ['value?'])
 
   attachType(Global.Array.get('prototype').get('map'), ['predict'])

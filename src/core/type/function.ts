@@ -60,10 +60,6 @@ export class LppFunction extends LppObject {
   get(key: string): LppValue | LppReference {
     if (key === 'constructor') {
       return Global.Function
-    } else if (key === 'prototype') {
-      const res = this.value.get(key)
-      if (res) return res
-      else throw new Error('lpp: unexpected get -- prototype is null')
     } else {
       const res = this.value.get(key)
       if (res) return new LppReference(this, key, res)
@@ -74,9 +70,7 @@ export class LppFunction extends LppObject {
         )
       const proto = asValue(constructor.get('prototype'))
       if (!(proto instanceof LppObject))
-        throw new Error(
-          'lpp: unexpected prototype -- must be a LppObject instance'
-        )
+        return new LppReference(this, key, new LppConstant(null))
       const member = lookupPrototype(proto, key)
       if (member === null)
         return new LppReference(this, key, new LppConstant(null))
@@ -106,10 +100,7 @@ export class LppFunction extends LppObject {
         'lpp: unexpected constructor -- must be a LppFunction instance'
       )
     const proto = asValue(constructor.get('prototype'))
-    if (!(proto instanceof LppObject))
-      throw new Error(
-        'lpp: unexpected prototype -- must be a LppObject instance'
-      )
+    if (!(proto instanceof LppObject)) return false
     return lookupPrototype(proto, key) !== null
   }
   /**

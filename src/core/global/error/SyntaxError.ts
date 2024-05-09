@@ -6,6 +6,9 @@ import { async, raise, asValue } from '../../helper'
  * Lpp builtin `SyntaxError` -- represents an error when trying to interpret syntactically invalid code.
  */
 export default function (global: Record<string, LppValue>) {
+  const base = asValue(global.Error.get('prototype'))
+  if (!(base instanceof LppObject))
+    throw new Error('lpp: unexpected prototype -- should be Object')
   const SyntaxError = (global.SyntaxError = LppFunction.native(
     ({ self, args }) => {
       if (self.instanceof(SyntaxError)) {
@@ -22,10 +25,6 @@ export default function (global: Record<string, LppValue>) {
         })
       }
     },
-    new LppObject(
-      new Map([
-        ['prototype', asValue((global.Error as LppFunction).get('prototype'))]
-      ])
-    )
+    LppObject.create(base)
   ))
 }

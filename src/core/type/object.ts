@@ -4,6 +4,7 @@ import { LppReference, LppConstant } from '../type'
 import { LppValue, LppBinaryOperator, LppUnaryOperator, LppError } from './base'
 import { LppFunction } from './function'
 import Global from '../global'
+import { LppReturn } from '../context'
 
 export class LppObject extends LppValue {
   /**
@@ -15,10 +16,6 @@ export class LppObject extends LppValue {
     if (key === 'constructor') {
       return this.value.get(key) ?? Global.Object
     } else {
-      const res = this.value.get(key)
-      // patch: disable access to constructor prototype.
-      if (res || key == 'prototype')
-        return new LppReference(this, key, res ?? new LppConstant(null))
       const constructor = asValue(this.get('constructor'))
       if (!(constructor instanceof LppFunction))
         throw new Error(
@@ -26,9 +23,7 @@ export class LppObject extends LppValue {
         )
       const proto = asValue(constructor.get('prototype'))
       if (!(proto instanceof LppObject))
-        throw new Error(
-          'lpp: unexpected prototype -- must be a LppObject instance'
-        )
+        return new LppReference(this, key, new LppConstant(null))
       const member = lookupPrototype(proto, key)
       if (member === null)
         return new LppReference(this, key, new LppConstant(null))
@@ -58,10 +53,7 @@ export class LppObject extends LppValue {
         'lpp: unexpected constructor -- must be a LppFunction instance'
       )
     const proto = asValue(constructor.get('prototype'))
-    if (!(proto instanceof LppObject))
-      throw new Error(
-        'lpp: unexpected prototype -- must be a LppObject instance'
-      )
+    if (!(proto instanceof LppObject)) return false
     return lookupPrototype(proto, key) !== null
   }
   /**
@@ -186,5 +178,24 @@ export class LppObject extends LppValue {
     super()
     this.value = value ?? new Map()
     if (constructor) this.value.set('constructor', constructor)
+  }
+  /**
+   * Create a new object, using an existing object as the prototype of the newly created object.
+   * @param prototype Prototype.
+   * @returns New object.
+   */
+  static create(prototype: LppObject): LppObject {
+    return new LppObject(
+      new Map(),
+      new LppFunction(() => new LppReturn(new LppConstant(null)), prototype)
+    )
+  }
+  static assign(dest: LppObject, ...args: LppObject[]): LppObject {
+    for (const v of args) {
+      for (const [key, value] of v.value.entries()) {
+        if (key !== 'constructor') dest.value.set(key, value)
+      }
+    }
+    return dest
   }
 }
