@@ -407,23 +407,22 @@ export class ImmediatePromise<T> implements PromiseLike<T> {
     })
   }
   /**
-   * Make a PromiseLike object synchronous.
-   * @param v PromiseLike object.
-   * @returns Value or PromiseLike object.
-   * @warning Non-standard.
+   * Make a ImmediatePromise object synchronous.
+   * @param v ImmediatePromise object.
+   * @returns Value or ImmediatePromise object.
    */
-  static sync<T>(v: PromiseLike<T>): T | PromiseLike<T> {
-    let result: Resolved<T> | Rejected | undefined = undefined
+  static sync<T>(v: ImmediatePromise<T>): T | ImmediatePromise<T> {
+    let result: Resolved<Awaited<T>> | Rejected | undefined = undefined
     v.then(
       v => {
-        result = new Resolved(v)
+        result = new Resolved(v as Awaited<T>)
       },
       v => {
         result = new Rejected(v)
       }
     )
     if (result) {
-      const v = result as Resolved<T> | Rejected
+      const v = result as Resolved<Awaited<T>> | Rejected
       if (v instanceof Resolved) {
         return v.value
       } else {
@@ -442,7 +441,7 @@ export class ImmediatePromise<T> implements PromiseLike<T> {
    *
    * @version es2023
    */
-  withResolvers<T>(): ImmediatePromiseWithResolvers<T> {
+  static withResolvers<T>(): ImmediatePromiseWithResolvers<T> {
     let resolveFn: (value: T | PromiseLike<T>) => void
     let rejectFn: (reason?: unknown) => void
     resolveFn = rejectFn = (): never => {

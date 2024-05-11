@@ -1,5 +1,10 @@
-import type { LppFunction } from './type'
-import { LppValue, LppConstant, LppReference, LppPromise } from './type'
+import {
+  LppValue,
+  LppConstant,
+  LppReference,
+  LppPromise,
+  LppFunction
+} from './type'
 
 /**
  * LppFunction return value.
@@ -182,8 +187,7 @@ export class LppFunctionContext extends LppContext {
   /**
    * @param parent Parent context.
    * @param self Self object.
-   * @param returnCallback Callback if function returns.
-   * @param exceptionCallback Callback if function throws.
+   * @param callback Callback for return / exception.
    */
   constructor(
     parent: LppContext | undefined,
@@ -194,11 +198,7 @@ export class LppFunctionContext extends LppContext {
   }
 }
 export class LppAsyncFunctionContext extends LppFunctionContext {
-  promise?: {
-    promise: PromiseLike<LppValue>
-    resolve: (value: LppValue | PromiseLike<LppValue>) => void
-    reject: (reason?: unknown) => void
-  }
+  promise?: PromiseWithResolvers<LppValue>
   detach() {
     if (!this.promise) {
       let resolveFn: (v: LppValue | PromiseLike<LppValue>) => void

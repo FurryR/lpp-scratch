@@ -1,4 +1,5 @@
 import { LppObject, LppValue, LppFunction } from '../type'
+import { asValue } from './cast'
 
 /**
  * Lookup for a property in prototype.
@@ -27,9 +28,9 @@ export function lookupPrototype(
         return res
       } else {
         // recursive
-        const constructor = proto.value.get('constructor')
+        const constructor = asValue(proto.get('constructor'))
         if (constructor instanceof LppFunction) {
-          const v = proto.value.get('prototype')
+          const v = asValue(proto.get('prototype'))
           if (v instanceof LppObject) {
             if (cache.has(v)) return null
             else cache.add(v)
@@ -52,12 +53,21 @@ export function comparePrototype(
   prototype1: LppObject,
   prototype2: LppObject
 ): boolean {
-  if (prototype1 === prototype2) return true
-  const constructor1 = prototype1.value.get('constructor')
-  if (constructor1 && constructor1 instanceof LppFunction) {
-    const v = constructor1.value.get('prototype')
-    // recursive
-    if (v instanceof LppObject) return comparePrototype(v, prototype2)
+  const cache = new WeakSet<LppObject>()
+  function comparePrototypeInternal(
+    prototype1: LppObject,
+    prototype2: LppObject
+  ): boolean {
+    if (prototype1 === prototype2) return true
+    else if (cache.has(prototype1)) return false
+    else cache.add(prototype1)
+    const constructor1 = asValue(prototype1.get('constructor'))
+    if (constructor1 instanceof LppFunction) {
+      const v = asValue(constructor1.get('prototype'))
+      // recursive
+      if (v instanceof LppObject) return comparePrototype(v, prototype2)
+    }
+    return false
   }
-  return false
+  return comparePrototypeInternal(prototype1, prototype2)
 }

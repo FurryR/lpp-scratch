@@ -882,7 +882,7 @@ import { LppBoundArg } from './impl/boundarg'
                       thread.lpp?.resolve(
                         new LppException(ctx.args[0] ?? new LppConstant(null))
                       )
-                      thread.stopThisScript()
+                      this.vm.runtime.sequencer.retireThread(thread)
                       resolve(new LppConstant(null))
                       return new LppReturn(new LppConstant(null))
                     })
@@ -894,15 +894,12 @@ import { LppBoundArg } from './impl/boundarg'
               throw new Error('lpp: unknown operand')
           }
         })()
-        if (isPromise(res)) {
-          return this.asap(
-            res.then(val => {
-              return new Wrapper(val)
-            }),
-            util.thread
-          )
-        }
-        return new Wrapper(res)
+        return this.asap(
+          ImmediatePromise.resolve(res).then(val => {
+            return new Wrapper(val)
+          }),
+          util.thread
+        )
       } catch (e) {
         this.handleError(e)
       }
@@ -1268,7 +1265,7 @@ import { LppBoundArg } from './impl/boundarg'
               if (!(then.value instanceof LppFunction)) {
                 lpp.detach()
                 lpp.promise?.resolve(val)
-                return thread.stopThisScript()
+                return this.vm.runtime.sequencer.retireThread(thread)
               }
               thenFn = then.value
               thenSelf = then.parent.deref() ?? new LppConstant(null)
@@ -1276,7 +1273,7 @@ import { LppBoundArg } from './impl/boundarg'
               if (!(then instanceof LppFunction)) {
                 lpp.detach()
                 lpp.promise?.resolve(val)
-                return thread.stopThisScript()
+                return this.vm.runtime.sequencer.retireThread(thread)
               }
               thenFn = then
               thenSelf = new LppConstant(null)
@@ -1288,13 +1285,13 @@ import { LppBoundArg } from './impl/boundarg'
                   thenFn.apply(thenSelf, [
                     new LppFunction(ctx => {
                       lpp.promise?.resolve(ctx.args[0] ?? new LppConstant(null))
-                      thread.stopThisScript()
+                      this.vm.runtime.sequencer.retireThread(thread)
                       resolve()
                       return new LppReturn(new LppConstant(null))
                     }),
                     new LppFunction(ctx => {
                       lpp.promise?.reject(ctx.args[0] ?? new LppConstant(null))
-                      thread.stopThisScript()
+                      this.vm.runtime.sequencer.retireThread(thread)
                       resolve()
                       return new LppReturn(new LppConstant(null))
                     })
@@ -1305,7 +1302,7 @@ import { LppBoundArg } from './impl/boundarg'
             )
           } else if (lpp instanceof LppFunctionContext) {
             lpp.resolve(new LppReturn(val))
-            return thread.stopThisScript()
+            return this.vm.runtime.sequencer.retireThread(thread)
           }
         }
         throw new LppError('useOutsideFunction')
@@ -1337,7 +1334,7 @@ import { LppBoundArg } from './impl/boundarg'
         )
         if (lppThread.lpp) {
           lppThread.lpp.resolve(result)
-          return thread.stopThisScript()
+          return this.vm.runtime.sequencer.retireThread(thread)
         }
         this.handleException(result)
       } catch (e) {
@@ -1376,7 +1373,6 @@ import { LppBoundArg } from './impl/boundarg'
                 value => {
                   if (parentThread.lpp) {
                     parentThread.lpp.resolve(value)
-                    // return scopeThread.stopThisScript()
                   } else throw new LppError('useOutsideFunction')
                 }
               )
@@ -1426,7 +1422,6 @@ import { LppBoundArg } from './impl/boundarg'
                   if (value instanceof LppReturn) {
                     if (parentThread.lpp) {
                       parentThread.lpp.resolve(value)
-                      // return tryThread.stopThisScript()
                     } else throw new LppError('useOutsideFunction')
                   } else {
                     triggered = true
@@ -1449,7 +1444,6 @@ import { LppBoundArg } from './impl/boundarg'
                       value => {
                         if (parentThread.lpp) {
                           parentThread.lpp.resolve(value)
-                          // return thread.stopThisScript()
                         } else {
                           if (value instanceof LppReturn)
                             throw new LppError('useOutsideFunction')
