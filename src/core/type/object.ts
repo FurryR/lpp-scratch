@@ -16,6 +16,8 @@ export class LppObject extends LppValue {
     if (key === 'constructor') {
       return this.value.get(key) ?? Global.Object
     } else {
+      const res = this.value.get(key)
+      if (res) return new LppReference(this, key, res)
       const constructor = asValue(this.get('constructor'))
       if (!(constructor instanceof LppFunction))
         throw new Error(
