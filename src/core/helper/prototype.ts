@@ -30,11 +30,11 @@ export function lookupPrototype(
         // recursive
         const constructor = asValue(proto.get('constructor'))
         if (constructor instanceof LppFunction) {
-          const v = asValue(proto.get('prototype'))
+          const v = asValue(constructor.get('prototype'))
           if (v instanceof LppObject) {
             if (cache.has(v)) return null
             else cache.add(v)
-            return lookupPrototype(v, name)
+            return lookupPrototypeInternal(v, name)
           }
         }
       }
@@ -65,7 +65,7 @@ export function comparePrototype(
     if (constructor1 instanceof LppFunction) {
       const v = asValue(constructor1.get('prototype'))
       // recursive
-      if (v instanceof LppObject) return comparePrototype(v, prototype2)
+      if (v instanceof LppObject) return comparePrototypeInternal(v, prototype2)
     }
     return false
   }

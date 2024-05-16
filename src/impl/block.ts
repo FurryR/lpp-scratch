@@ -1044,7 +1044,7 @@ export function defineExtension(
                       const fields = runtime
                         .getEditingTarget()
                         ?.blocks.getBlock(block.id)?.fields
-                      if (fields)
+                      if (fields && !fields[`OP_${i}`])
                         fields[`OP_${i}`] = {
                           id: null,
                           name: `OP_${i}`,
