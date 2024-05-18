@@ -28,7 +28,7 @@ export function show(
   elem.style.maxHeight = 'none'
   elem.style.textAlign = textAlign
   elem.style.userSelect = 'none'
-  contentDiv.appendChild(elem)
+  contentDiv.append(elem)
   Blockly.DropDownDiv.setColour(
     Blockly.Colours.valueReportBackground,
     Blockly.Colours.valueReportBorder
@@ -162,5 +162,5 @@ if (globalStyle) {
   text-shadow: 0 0 0 gray, 0px 0px 5px silver;
 }
 `
-  document.head.appendChild(globalStyle)
+  document.head.append(globalStyle)
 }

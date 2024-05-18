@@ -1,5 +1,5 @@
 import { LppContext } from '../core'
-import { TypeMetadata } from './metadata'
+import { FunctionType, TypeMetadata } from './metadata'
 
 export interface SerializationInfo {
   /**
@@ -18,6 +18,7 @@ export interface SerializationInfo {
 export class ScratchMetadata extends TypeMetadata {
   /**
    * Construct a Scratch metadata object.
+   * @param type Function type.
    * @param signature Function's signature.
    * @param blocks Runtime blocks instance (for serialize/deserialize) and Block ID (refers to lpp_constructFunction).
    * @param sprite Original sprite ID of block container.
@@ -25,13 +26,14 @@ export class ScratchMetadata extends TypeMetadata {
    * @param closure Function's closure.
    */
   constructor(
+    type: FunctionType,
     signature: string[],
     public blocks: [VM.Blocks, string],
     public sprite?: string,
     public target?: string,
     public closure?: LppContext
   ) {
-    super(signature)
+    super(type, signature)
   }
 }
 /**

@@ -11,9 +11,9 @@
     "lint": "eslint ./src",
     "lint:type": "tsc --noEmit -p ./tsconfig.json",
     "fix": "eslint ./src --fix",
-    "start": "tsup && http-server ./dist -p 8080 --cors",
-    "build": "tsup",
-    "build:turbowarp": "tsup && (npx prettier --config turbowarp/.prettierrc --parser acorn < dist/index.global.js) > dist/index.global.formatted.js",
+    "start": "tsup src/withL10n.ts && http-server ./dist -p 8080 --cors",
+    "build": "tsup src/withL10n.ts",
+    "build:turbowarp": "tsup src/index.ts && (npx prettier --config turbowarp/.prettierrc --parser acorn < dist/index.global.js) > dist/index.global.formatted.js && rimraf dist/index.global.js",
     "format": "prettier ./src -c -w",
     "lint:format": "prettier ./src -c"
   },
@@ -27,7 +27,8 @@
     "🤔 @SimonShiki https://github.com/SimonShiki - Test, Technical support",
     "😄 @Nights https://github.com/Nightre - Technical support",
     "🔤 @CST1229 https://github.com/CST1229 - Technical support",
-    "⭐ @DilemmaGX https://github.com/DilemmaGX - Icon artist (legacy)",
+    "🥚 @Ashimee https://github.com/Ashimee - Test, Technical support",
+    "⭐ @DilemmaGX https://github.com/DilemmaGX - Test, Icon artist (legacy)",
     "🍭 @TangDo158 https://github.com/TangDo158 - Icon artist (new)",
     "🐺 @VeroFess https://github.com/VeroFess - Technical support"
   ],
@@ -51,6 +52,7 @@
     "http-server": "^14.1.1",
     "pre-commit": "^1.2.2",
     "prettier": "^3.2.1",
+    "rimraf": "^5.0.7",
     "tsup": "^8.0.1",
     "typescript": "^5.3.3"
   }

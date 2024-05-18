@@ -2,7 +2,6 @@ import { defineConfig } from 'tsup'
 
 export default defineConfig({
   name: 'lpp',
-  entry: ['src/index.ts'],
   target: ['esnext'],
   format: ['iife'],
   outDir: 'dist',

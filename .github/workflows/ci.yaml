@@ -31,8 +31,15 @@ jobs:
         run: npm ci
       - name: 🛠️ Build lpp
         run: npm run build --if-present
-      - name: ✅ Upload artifacts
+      - name: ✅ Upload artifacts (lpp)
         uses: actions/upload-artifact@v4
         with:
           name: lpp
-          path: dist/index.global.js
+          path: dist/withL10n.global.js
+      - name: 🛠️ Build lpp (Turbowarp version)
+        run: npm run build:turbowarp --if-present
+      - name: ✅ Upload artifacts (lpp-turbowarp)
+        uses: actions/upload-artifact@v4
+        with:
+          name: lpp-turbowarp
+          path: dist/index.global.formatted.js

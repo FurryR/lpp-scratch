@@ -21,7 +21,7 @@ function addShadow(field: Shadowable, value: string): Shadowable {
   elem.setAttribute('type', 'text')
   child.setAttribute('name', 'TEXT')
   child.textContent = value
-  elem.appendChild(child)
+  elem.append(child)
   field.connection.setShadowDom(elem)
   field.connection.respawnShadow_()
   return field

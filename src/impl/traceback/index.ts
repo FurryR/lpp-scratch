@@ -56,7 +56,7 @@ export function showTraceback(svgRoot: SVGAElement) {
     container.id = 'tmpSVGContainer'
     container.innerHTML =
       '<svg id="tmpSVG" xmlns="http://www.w3.org/2000/svg" xmlns:html="http://www.w3.org/1999/xhtml" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" class="blocklySvg"><style type="text/css" ><![CDATA[.blocklyDraggable{font-family: "Helvetica Neue", Helvetica, sans-serif;font-size: 12pt;font-weight: 500;}.blocklyText {fill: #fff;box-sizing: border-box;}.blocklyEditableText .blocklyText{fill: #000;}.blocklyDropdownText.blocklyText{fill: #fff;}]]></style><g id="tmpSVGContent"></g></svg>'
-    document.body.appendChild(container)
+    document.body.append(container)
   }
   const content = document.getElementById('tmpSVGContent')
   if (content && content instanceof SVGGElement) {

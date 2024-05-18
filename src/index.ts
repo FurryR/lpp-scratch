@@ -267,6 +267,13 @@ import { LppBoundArg } from './impl/boundarg'
         }
       }
       const _requestUpdateMonitor = runtime.requestUpdateMonitor
+      const monitorMap: Map<
+        string,
+        {
+          value?: LppValue
+          mode: string
+        }
+      > = new Map()
       if (_requestUpdateMonitor) {
         const patchMonitorValue = (element: HTMLElement, value: unknown) => {
           const valueElement = element.querySelector('[class*="value"]')
@@ -322,13 +329,6 @@ import { LppBoundArg } from './impl/boundarg'
           }
           return null
         }
-        const monitorMap: Map<
-          string,
-          {
-            value?: LppValue | LppBoundArg
-            mode: string
-          }
-        > = new Map()
         runtime.requestUpdateMonitor = state => {
           const id = state.get('id')
           if (typeof id === 'string') {
@@ -344,25 +344,17 @@ import { LppBoundArg } from './impl/boundarg'
             } else if (monitorValue !== undefined) {
               // Update the monitor when the value changes.
               const unwrappedValue = Wrapper.unwrap(monitorValue)
-              if (
-                unwrappedValue instanceof LppValue ||
-                unwrappedValue instanceof LppReference ||
-                unwrappedValue instanceof LppBoundArg
-              ) {
-                const actualValue =
-                  unwrappedValue instanceof LppBoundArg
-                    ? unwrappedValue
-                    : asValue(unwrappedValue)
-                if (!cache || cache.value !== actualValue) {
+              if (unwrappedValue instanceof LppValue) {
+                if (!cache || cache.value !== unwrappedValue) {
                   requestAnimationFrame(() => {
                     const monitor = getMonitorById(id)
                     if (monitor) {
-                      patchMonitorValue(monitor, actualValue)
+                      patchMonitorValue(monitor, unwrappedValue)
                     }
                   })
                   if (!cache) {
                     monitorMap.set(id, {
-                      value: actualValue,
+                      value: unwrappedValue,
                       mode: (() => {
                         if (runtime.getMonitorState) {
                           const monitorCached = runtime
@@ -376,7 +368,7 @@ import { LppBoundArg } from './impl/boundarg'
                         return 'normal'
                       })()
                     })
-                  } else cache.value = actualValue
+                  } else cache.value = unwrappedValue
                 }
                 return true
               } else {
@@ -394,6 +386,59 @@ import { LppBoundArg } from './impl/boundarg'
             }
           }
           return _requestUpdateMonitor.call(runtime, state)
+        }
+      }
+      // Extra checks for variables
+      const patchVariable = (variable: VM.Variable) => {
+        let value: unknown = variable.value
+        Object.defineProperty(variable, 'value', {
+          get() {
+            return value
+          },
+          set: (v: unknown) => {
+            const unwrappedValue = Wrapper.unwrap(v)
+            if (unwrappedValue instanceof LppBoundArg) {
+              this.handleError(new LppError('syntaxError'))
+            } else if (
+              unwrappedValue instanceof LppValue ||
+              unwrappedValue instanceof LppReference
+            ) {
+              value = new Wrapper(asValue(unwrappedValue))
+            } else {
+              value = v
+            }
+          }
+        })
+      }
+      const proxyVariable = (target: VM.Target) => {
+        target.variables = new Proxy(target.variables, {
+          set(target, p, variable: VM.Variable) {
+            patchVariable(variable)
+            return Reflect.set(target, p, variable)
+          }
+        })
+      }
+      const patchTarget = (target: VM.Target) => {
+        Object.values(target.variables).forEach(variable => {
+          patchVariable(variable)
+        })
+        proxyVariable(target)
+      }
+      for (const target of runtime.targets) {
+        patchTarget(target)
+      }
+      const _addTarget = runtime.addTarget
+      runtime.addTarget = function (target) {
+        patchTarget(target)
+        return _addTarget.call(this, target)
+      }
+      // Fix for PenguinMod.
+      const _stepThread = runtime.sequencer.stepThread
+      runtime.sequencer.stepThread = function (thread) {
+        try {
+          return _stepThread.call(this, thread)
+        } catch (e) {
+          if (!(e instanceof LppError)) throw e
         }
       }
       // Patch Function.
@@ -438,24 +483,34 @@ import { LppBoundArg } from './impl/boundarg'
             const blockId = val.script[val.block]?.id
             const Target = runtime.getTargetForStage()
               ?.constructor as TargetConstructor
+            const idMap: Record<string, Metadata.FunctionType> = {
+              constructFunction: 'function',
+              constructAsyncFunction: 'asyncFunction',
+              // TODO: implement generator
+              constructGeneratorFunction: 'generatorFunction',
+              constructAsyncGeneratorFunction: 'asyncGeneratorFunction'
+            }
             if (!Target) throw new Error('lpp: project is disposed')
-            return new LppReturn(
-              Metadata.attach(
-                new LppFunction(
-                  (blockId === 'constructAsyncFunction'
-                    ? this.executeScratchAsync
-                    : this.executeScratch
-                  ).bind(this, Target)
-                ),
-                new Serialization.ScratchMetadata(
-                  val.signature,
-                  [blocks, val.block],
-                  undefined,
-                  undefined,
-                  undefined
+            if (blockId in idMap) {
+              return new LppReturn(
+                Metadata.attach(
+                  new LppFunction(
+                    (blockId === 'constructAsyncFunction'
+                      ? this.executeScratchAsync
+                      : this.executeScratch
+                    ).bind(this, Target)
+                  ),
+                  new Serialization.ScratchMetadata(
+                    idMap[blockId],
+                    val.signature,
+                    [blocks, val.block],
+                    undefined,
+                    undefined,
+                    undefined
+                  )
                 )
               )
-            )
+            }
           }
           return async(function* () {
             return raise(
@@ -895,9 +950,11 @@ import { LppBoundArg } from './impl/boundarg'
           }
         })()
         return this.asap(
-          ImmediatePromise.resolve(res).then(val => {
-            return new Wrapper(val)
-          }),
+          ImmediatePromise.sync(
+            ImmediatePromise.resolve(res).then(val => {
+              return new Wrapper(val)
+            })
+          ),
           util.thread
         )
       } catch (e) {
@@ -1165,6 +1222,7 @@ import { LppBoundArg } from './impl/boundarg'
           Metadata.attach(
             new LppFunction(this.executeScratch.bind(this, Target)),
             new Serialization.ScratchMetadata(
+              'function',
               signature,
               [blocks, block.id],
               target.sprite.clones[0].id,
@@ -1209,6 +1267,7 @@ import { LppBoundArg } from './impl/boundarg'
           Metadata.attach(
             new LppFunction(this.executeScratchAsync.bind(this, Target)),
             new Serialization.ScratchMetadata(
+              'asyncFunction',
               signature,
               [blocks, block.id],
               target.sprite.clones[0].id,

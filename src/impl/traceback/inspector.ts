@@ -90,7 +90,7 @@ export function Inspector(
                 JSON.stringify(index),
                 'lpp-code lpp-inspector-string lpp-inspector-key'
               ),
-        Dialog.Text(` ➡️ `)
+        Dialog.Text(' ➡️ ')
       )
       subelem.append(Inspector(Blockly, vm, translate, value))
       return subelem
@@ -146,7 +146,7 @@ export function Inspector(
           '[[FunctionLocation]]',
           'lpp-code lpp-inspector-key-constructor'
         ),
-        Dialog.Text(` ➡︎ `)
+        Dialog.Text(' ➡︎ ')
       )
       const traceback = document.createElement('span')
       traceback.classList.add('lpp-code')
@@ -210,7 +210,72 @@ export function Inspector(
     value instanceof LppFunction ||
     value instanceof LppBoundArg
   ) {
-    let v: HTMLUListElement | undefined
+    const generateSummary = (
+      value: LppArray | LppObject | LppFunction | LppBoundArg
+    ): HTMLSpanElement => {
+      let code: HTMLSpanElement
+      if (value instanceof LppArray) {
+        code = Dialog.Text(
+          value.value.length === 0 ? '[]' : '[...]',
+          'lpp-code'
+        )
+      } else if (value instanceof LppFunction) {
+        const metadata = hasMetadata(value)
+        code = Dialog.Text(
+          `${metadata && value.metadata instanceof TypeMetadata && (value.metadata.type === 'asyncFunction' || value.metadata.type === 'asyncGeneratorFunction') ? 'async ' : ''}f${metadata && value.metadata instanceof TypeMetadata && (value.metadata.type === 'generatorFunction' || value.metadata.type === 'asyncGeneratorFunction') ? '*' : ''} (${metadata && value.metadata instanceof TypeMetadata ? value.metadata.signature.join(', ') : ''})`,
+          'lpp-code'
+        )
+        code.style.fontStyle = 'italic'
+      } else if (value instanceof LppObject) {
+        code = Dialog.Text(value.value.size === 0 ? '{}' : '{...}', 'lpp-code')
+      } else {
+        code = Dialog.Text(
+          value.value.length === 0 ? '()' : '(...)',
+          'lpp-code'
+        )
+      }
+      if (
+        Blockly &&
+        (value instanceof LppFunction || value instanceof LppObject) &&
+        hasMetadata(value) &&
+        value.metadata instanceof ScratchMetadata &&
+        value.metadata.sprite &&
+        vm.runtime.getTargetById(value.metadata.sprite)
+      ) {
+        const workspace =
+          Blockly.getMainWorkspace() as ScratchBlocks.WorkspaceSvg
+        const { sprite, blocks } = value.metadata
+        code.title = translate({
+          id: 'lpp.tooltip.button.scrollToBlockEnabled',
+          default: 'Scroll to this block.',
+          description: 'Scroll button text.'
+        })
+        code.classList.add('lpp-traceback-stack-enabled')
+        code.addEventListener('click', () => {
+          const box =
+            Blockly.DropDownDiv.getContentDiv().getElementsByClassName(
+              'valueReportBox'
+            )[0]
+          vm.setEditingTarget(sprite)
+          workspace.centerOnBlock(blocks[1], true)
+          if (box) {
+            Blockly.DropDownDiv.hideWithoutAnimation()
+            Blockly.DropDownDiv.clearContent()
+            Blockly.DropDownDiv.getContentDiv().append(box)
+            Blockly.DropDownDiv.showPositionedByBlock(
+              workspace as unknown as ScratchBlocks.Field<unknown>,
+              workspace.getBlockById(blocks[1]) as ScratchBlocks.BlockSvg
+            )
+          }
+        })
+      } else {
+        code.addEventListener('click', () => {
+          btn.click()
+        })
+      }
+      return code
+    }
+    let v: HTMLUListElement
     const btn = ExtendIcon(
       translate({
         id: 'lpp.tooltip.button.help.more',
@@ -223,67 +288,25 @@ export function Inspector(
         description: 'Hide detail button.'
       }),
       () => {
-        if (!v) span.appendChild((v = objView(value)))
-        else v.style.display = 'block'
+        if (code) {
+          code.remove()
+          code = generateSummary(value)
+          span.append(code)
+        }
+        span.append((v = objView(value)))
       },
       () => {
-        if (v) v.style.display = 'none'
+        v?.remove()
+        if (code) {
+          code.remove()
+          code = generateSummary(value)
+          span.append(code)
+        }
       }
     )
+    let code: HTMLSpanElement = generateSummary(value)
     const span = document.createElement('span')
     span.style.lineHeight = '80%'
-    let code: HTMLSpanElement
-    if (value instanceof LppArray) {
-      code = Dialog.Text(value.value.length === 0 ? '[]' : '[...]', 'lpp-code')
-    } else if (value instanceof LppFunction) {
-      code = Dialog.Text(
-        `f (${hasMetadata(value) && value.metadata instanceof TypeMetadata ? value.metadata.signature.join(', ') : ''})`,
-        'lpp-code'
-      )
-      code.style.fontStyle = 'italic'
-    } else if (value instanceof LppObject) {
-      code = Dialog.Text(value.value.size === 0 ? '{}' : '{...}', 'lpp-code')
-    } else {
-      code = Dialog.Text(value.value.length === 0 ? '()' : '(...)', 'lpp-code')
-    }
-    if (
-      Blockly &&
-      (value instanceof LppFunction || value instanceof LppObject) &&
-      hasMetadata(value) &&
-      value.metadata instanceof ScratchMetadata &&
-      value.metadata.sprite &&
-      vm.runtime.getTargetById(value.metadata.sprite)
-    ) {
-      const workspace = Blockly.getMainWorkspace() as ScratchBlocks.WorkspaceSvg
-      const { sprite, blocks } = value.metadata
-      code.title = translate({
-        id: 'lpp.tooltip.button.scrollToBlockEnabled',
-        default: 'Scroll to this block.',
-        description: 'Scroll button text.'
-      })
-      code.classList.add('lpp-traceback-stack-enabled')
-      code.addEventListener('click', () => {
-        const box =
-          Blockly.DropDownDiv.getContentDiv().getElementsByClassName(
-            'valueReportBox'
-          )[0]
-        vm.setEditingTarget(sprite)
-        workspace.centerOnBlock(blocks[1], true)
-        if (box) {
-          Blockly.DropDownDiv.hideWithoutAnimation()
-          Blockly.DropDownDiv.clearContent()
-          Blockly.DropDownDiv.getContentDiv().append(box)
-          Blockly.DropDownDiv.showPositionedByBlock(
-            workspace as unknown as ScratchBlocks.Field<unknown>,
-            workspace.getBlockById(blocks[1]) as ScratchBlocks.BlockSvg
-          )
-        }
-      })
-    } else {
-      code.addEventListener('click', () => {
-        btn.click()
-      })
-    }
     span.append(btn, Dialog.Text(' '), code)
     return span
   }

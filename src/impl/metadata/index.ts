@@ -1,5 +1,10 @@
 import type { LppFunction, LppObject } from '../../core'
 
+export type FunctionType =
+  | 'function'
+  | 'asyncFunction'
+  | 'generatorFunction'
+  | 'asyncGeneratorFunction'
 export interface Metadata {
   metadata: unknown
 }
@@ -8,7 +13,10 @@ export class TypeMetadata {
    * Construct a type metadata object.
    * @param signature Function's signature.
    */
-  constructor(public signature: string[]) {}
+  constructor(
+    public type: FunctionType,
+    public signature: string[]
+  ) {}
 }
 export function hasMetadata<T extends LppObject | LppFunction>(
   obj: T
