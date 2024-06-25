@@ -15,6 +15,6 @@ export default defineConfig({
   platform: 'browser',
   clean: true,
   loader: {
-    'svg': 'text'
+    '.svg': 'text'
   }
 })
