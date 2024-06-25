@@ -13,5 +13,8 @@ export default defineConfig({
 // License: LGPL-3.0`
   },
   platform: 'browser',
-  clean: true
+  clean: true,
+  loader: {
+    'svg': 'text'
+  }
 })
