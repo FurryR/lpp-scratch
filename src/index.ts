@@ -908,8 +908,9 @@ import { LppBoundArg } from './impl/boundarg'
                 this.processApplyValue(
                   yield func.apply(
                     fn instanceof LppReference
-                      ? fn.parent.deref() ?? new LppConstant(null)
-                      : lppThread.lpp?.unwind()?.self ?? new LppConstant(null),
+                      ? (fn.parent.deref() ?? new LppConstant(null))
+                      : (lppThread.lpp?.unwind()?.self ??
+                          new LppConstant(null)),
                     actualArgs
                   ),
                   thread
@@ -1527,7 +1528,7 @@ import { LppBoundArg } from './impl/boundarg'
             v => args === v._argValues
           )?.id
       const block = id
-        ? container.getBlock(id) ?? vm.runtime.flyoutBlocks.getBlock(id)
+        ? (container.getBlock(id) ?? vm.runtime.flyoutBlocks.getBlock(id))
         : vm.runtime.flyoutBlocks.getBlock(thread.peekStack())
       if (!block) {
         throw new Error('lpp: cannot get active block')

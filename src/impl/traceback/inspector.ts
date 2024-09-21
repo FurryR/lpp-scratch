@@ -131,10 +131,10 @@ export function Inspector(
           'constructor',
           value instanceof LppArray
             ? Global.Array
-            : value.value.get('constructor') ??
+            : (value.value.get('constructor') ??
                 (value instanceof LppFunction
                   ? Global.Function
-                  : Global.Object),
+                  : Global.Object)),
           false
         )
       )
