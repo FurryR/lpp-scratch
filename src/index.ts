@@ -43,7 +43,6 @@ import { defineExtension } from './impl/block'
 import { LppTraceback } from './impl/context'
 import * as Metadata from './impl/metadata'
 import * as Serialization from './impl/serialization'
-import { Wrapper } from './impl/wrapper'
 import { attachType } from './impl/typehint'
 import { ImmediatePromise, PromiseProxy } from './impl/promise'
 import { ThreadController } from './impl/thread'
@@ -153,17 +152,14 @@ import { LppBoundArg } from './impl/boundarg'
       // Patch visualReport.
       const _visualReport = runtime.visualReport
       runtime.visualReport = (blockId: string, value: unknown) => {
-        const unwrappedValue = Wrapper.unwrap(value)
         if (
-          (unwrappedValue instanceof LppValue ||
-            unwrappedValue instanceof LppReference ||
-            unwrappedValue instanceof LppBoundArg) &&
+          (value instanceof LppValue ||
+            value instanceof LppReference ||
+            value instanceof LppBoundArg) &&
           blockly
         ) {
           const actualValue =
-            unwrappedValue instanceof LppBoundArg
-              ? unwrappedValue
-              : asValue(unwrappedValue)
+            value instanceof LppBoundArg ? value : asValue(value)
           Dialog.show(
             blockly as BlocklyInstance,
             blockId,
@@ -246,18 +242,17 @@ import { LppBoundArg } from './impl/boundarg'
               cache.value = undefined
             } else if (monitorValue !== undefined) {
               // Update the monitor when the value changes.
-              const unwrappedValue = Wrapper.unwrap(monitorValue)
-              if (unwrappedValue instanceof LppValue) {
-                if (!cache || cache.value !== unwrappedValue) {
+              if (monitorValue instanceof LppValue) {
+                if (!cache || cache.value !== monitorValue) {
                   requestAnimationFrame(() => {
                     const monitor = getMonitorById(id)
                     if (monitor) {
-                      patchMonitorValue(monitor, unwrappedValue)
+                      patchMonitorValue(monitor, monitorValue)
                     }
                   })
                   if (!cache) {
                     monitorMap.set(id, {
-                      value: unwrappedValue,
+                      value: monitorValue,
                       mode: (() => {
                         if (runtime.getMonitorState) {
                           const monitorCached = runtime
@@ -271,7 +266,7 @@ import { LppBoundArg } from './impl/boundarg'
                         return 'normal'
                       })()
                     })
-                  } else cache.value = unwrappedValue
+                  } else cache.value = monitorValue
                 }
                 return true
               } else {
@@ -299,14 +294,10 @@ import { LppBoundArg } from './impl/boundarg'
             return value
           },
           set: (v: unknown) => {
-            const unwrappedValue = Wrapper.unwrap(v)
-            if (unwrappedValue instanceof LppBoundArg) {
+            if (v instanceof LppBoundArg) {
               this.handleError(new LppError('syntaxError'))
-            } else if (
-              unwrappedValue instanceof LppValue ||
-              unwrappedValue instanceof LppReference
-            ) {
-              value = new Wrapper(asValue(unwrappedValue))
+            } else if (v instanceof LppValue || v instanceof LppReference) {
+              value = asValue(v)
             } else {
               value = v
             }
@@ -429,7 +420,6 @@ import { LppBoundArg } from './impl/boundarg'
       runtime.lpp = {
         Core,
         Metadata: Metadata,
-        Wrapper,
         version
       }
       console.groupCollapsed('💫 lpp', version)
@@ -517,16 +507,13 @@ import { LppBoundArg } from './impl/boundarg'
      * @param args Function name.
      * @returns Class.
      */
-    builtinType(
-      args: { value: string },
-      util: VM.BlockUtility
-    ): Wrapper<LppValue> {
+    builtinType(args: { value: string }, util: VM.BlockUtility): LppValue {
       this.util = util
       const instance = (Global as Record<string, LppValue | undefined>)[
         args.value
       ]
       if (instance) {
-        return new Wrapper(instance)
+        return instance
       }
       throw new Error('lpp: not implemented')
     }
@@ -536,10 +523,7 @@ import { LppBoundArg } from './impl/boundarg'
      * @param util Scratch util.
      * @returns Class.
      */
-    builtinError(
-      args: { value: string },
-      util: VM.BlockUtility
-    ): Wrapper<LppValue> {
+    builtinError(args: { value: string }, util: VM.BlockUtility): LppValue {
       return this.builtinType(args, util)
     }
     /**
@@ -548,10 +532,7 @@ import { LppBoundArg } from './impl/boundarg'
      * @param util Scratch util.
      * @returns Class.
      */
-    builtinUtility(
-      args: { value: string },
-      util: VM.BlockUtility
-    ): Wrapper<LppValue> {
+    builtinUtility(args: { value: string }, util: VM.BlockUtility): LppValue {
       return this.builtinType(args, util)
     }
     /**
@@ -563,24 +544,21 @@ import { LppBoundArg } from './impl/boundarg'
     constructLiteral(
       args: { value: unknown },
       util: VM.BlockUtility
-    ): Wrapper<LppConstant> {
+    ): LppConstant {
       this.util = util
-      const res = (() => {
-        switch (args.value) {
-          case 'null':
-            return new LppConstant(null)
-          case 'true':
-            return new LppConstant(true)
-          case 'false':
-            return new LppConstant(false)
-          case 'NaN':
-            return new LppConstant(NaN)
-          case 'Infinity':
-            return new LppConstant(Infinity)
-        }
-        throw new Error('lpp: unknown literal')
-      })()
-      return new Wrapper(res)
+      switch (args.value) {
+        case 'null':
+          return new LppConstant(null)
+        case 'true':
+          return new LppConstant(true)
+        case 'false':
+          return new LppConstant(false)
+        case 'NaN':
+          return new LppConstant(NaN)
+        case 'Infinity':
+          return new LppConstant(Infinity)
+      }
+      throw new Error('lpp: unknown literal')
     }
     /**
      * Make binary calculations.
@@ -591,7 +569,7 @@ import { LppBoundArg } from './impl/boundarg'
     binaryOp(
       args: Record<string, unknown>,
       util: VM.BlockUtility
-    ): Wrapper<LppValue> | Wrapper<LppReference> {
+    ): LppValue | LppReference {
       const { thread } = util
       this.util = util
       // Original algorithm from: lpp C++ implementation
@@ -746,7 +724,7 @@ import { LppBoundArg } from './impl/boundarg'
         const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
           const op = args[`OP_${i}`]
-          const value = Wrapper.unwrap(args[`ARG_${i}`])
+          const value = args[`ARG_${i}`]
           if (typeof op === 'string') {
             token.push(new Operator(op))
           }
@@ -760,7 +738,7 @@ import { LppBoundArg } from './impl/boundarg'
         }
         const res = evaluate(intoRPN(token))
         if (typeof res === 'string') throw new Error('lpp: invalid expression')
-        return new Wrapper(res)
+        return res
       } catch (e) {
         this.handleError(e)
       }
@@ -775,22 +753,24 @@ import { LppBoundArg } from './impl/boundarg'
       args: { op: string; value: unknown },
       util: VM.BlockUtility
     ):
-      | PromiseProxy<Wrapper<LppValue | LppReference | LppBoundArg>>
-      | Wrapper<LppValue | LppReference | LppBoundArg> {
+      | PromiseProxy<LppValue | LppReference | LppBoundArg>
+      | LppValue
+      | LppReference
+      | LppBoundArg {
       /**
-       * ['+', '+'],
-         ['-', '-'],
-         ['!', '!'],
-         ['~', '~'],
-         ['...', '...'],
-         ['delete', 'delete'],
-         ['await', 'await'],
-         ['yield', 'yield'],
-         ['yield*', 'yield*']
+       *  ['+', '+'],
+          ['-', '-'],
+          ['!', '!'],
+          ['~', '~'],
+          ['...', '...'],
+          ['delete', 'delete'],
+          ['await', 'await'],
+          ['yield', 'yield'],
+          ['yield*', 'yield*']
        */
       this.util = util
       try {
-        const value = Wrapper.unwrap(args.value)
+        const value = args.value
         if (!(value instanceof LppValue || value instanceof LppReference))
           throw new LppError('syntaxError')
         const res = (() => {
@@ -853,11 +833,7 @@ import { LppBoundArg } from './impl/boundarg'
           }
         })()
         return this.asap(
-          ImmediatePromise.sync(
-            ImmediatePromise.resolve(res).then(val => {
-              return new Wrapper(val)
-            })
-          ),
+          ImmediatePromise.sync(ImmediatePromise.resolve(res)),
           util.thread
         )
       } catch (e) {
@@ -876,18 +852,17 @@ import { LppBoundArg } from './impl/boundarg'
         unknown
       >,
       util: VM.BlockUtility
-    ): PromiseProxy<Wrapper<LppValue>> | Wrapper<LppValue> {
+    ): PromiseProxy<LppValue> | LppValue {
       const { thread } = util
       this.util = util
       try {
-        let { fn } = args
-        fn = Wrapper.unwrap(fn)
+        const { fn } = args
         const actualArgs: LppValue[] = []
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, thread)
         const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
-          const value = Wrapper.unwrap(args[`ARG_${i}`])
+          const value = args[`ARG_${i}`]
           if (value instanceof LppBoundArg)
             actualArgs.push(
               ...value.value.map(val => val ?? new LppConstant(null))
@@ -904,17 +879,14 @@ import { LppBoundArg } from './impl/boundarg'
         return this.asap(
           async(
             function* (this: LppExtension) {
-              return new Wrapper(
-                this.processApplyValue(
-                  yield func.apply(
-                    fn instanceof LppReference
-                      ? (fn.parent.deref() ?? new LppConstant(null))
-                      : (lppThread.lpp?.unwind()?.self ??
-                          new LppConstant(null)),
-                    actualArgs
-                  ),
-                  thread
-                )
+              return this.processApplyValue(
+                yield func.apply(
+                  fn instanceof LppReference
+                    ? (fn.parent.deref() ?? new LppConstant(null))
+                    : (lppThread.lpp?.unwind()?.self ?? new LppConstant(null)),
+                  actualArgs
+                ),
+                thread
               )
             }.bind(this)
           ),
@@ -936,19 +908,18 @@ import { LppBoundArg } from './impl/boundarg'
         unknown
       >,
       util: VM.BlockUtility
-    ): PromiseProxy<Wrapper<LppValue>> | Wrapper<LppValue> {
+    ): PromiseProxy<LppValue> | LppValue {
       const { thread } = util
       this.util = util
       try {
         let { fn } = args
-        fn = Wrapper.unwrap(fn)
         // runtime hack by @FurryR.
         const actualArgs: LppValue[] = []
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, thread)
         const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
-          const value = Wrapper.unwrap(args[`ARG_${i}`])
+          const value = args[`ARG_${i}`]
           if (value instanceof LppBoundArg)
             actualArgs.push(
               ...value.value.map(val => val ?? new LppConstant(null))
@@ -965,8 +936,9 @@ import { LppBoundArg } from './impl/boundarg'
             function* (this: LppExtension) {
               if (!(fn instanceof LppFunction))
                 throw new LppError('notCallable')
-              return new Wrapper(
-                this.processApplyValue(yield fn.construct(actualArgs), thread)
+              return this.processApplyValue(
+                yield fn.construct(actualArgs),
+                thread
               )
             }.bind(this)
           ),
@@ -982,7 +954,7 @@ import { LppBoundArg } from './impl/boundarg'
      * @param util Scratch util.
      * @returns Result.
      */
-    self(_: object, util: VM.BlockUtility): Wrapper<LppValue> {
+    self(_: object, util: VM.BlockUtility): LppValue {
       try {
         const { thread } = util
         this.util = util
@@ -990,7 +962,7 @@ import { LppBoundArg } from './impl/boundarg'
         if (lppThread.lpp) {
           const unwind = lppThread.lpp.unwind()
           if (unwind) {
-            return new Wrapper(unwind.self)
+            return unwind.self
           }
         }
         throw new LppError('useOutsideFunction')
@@ -1008,10 +980,10 @@ import { LppBoundArg } from './impl/boundarg'
         value: string | number
       },
       util: VM.BlockUtility
-    ): Wrapper<LppConstant<number>> {
+    ): LppConstant<number> {
       const obj = new LppConstant(Number(args.value))
       this.util = util
-      return new Wrapper(obj)
+      return obj
     }
     /**
      * Construct a String.
@@ -1023,10 +995,10 @@ import { LppBoundArg } from './impl/boundarg'
         value: string | number
       },
       util: VM.BlockUtility
-    ): Wrapper<LppConstant<string>> {
+    ): LppConstant<string> {
       const obj = new LppConstant(String(args.value))
       this.util = util
-      return new Wrapper(obj)
+      return obj
     }
     /**
      * Construct an Array.
@@ -1037,7 +1009,7 @@ import { LppBoundArg } from './impl/boundarg'
     constructArray(
       args: Record<string, unknown>,
       util: VM.BlockUtility
-    ): Wrapper<LppArray> {
+    ): LppArray {
       try {
         const { thread } = util
         this.util = util
@@ -1045,13 +1017,13 @@ import { LppBoundArg } from './impl/boundarg'
         const block = this.getActiveBlockInstance(args, thread)
         const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
-          const value = Wrapper.unwrap(args[`ARG_${i}`])
+          const value = args[`ARG_${i}`]
           if (value instanceof LppBoundArg) arr.value.push(...value.value)
           else if (value instanceof LppValue || value instanceof LppReference)
             arr.value.push(asValue(value))
           else throw new LppError('syntaxError')
         }
-        return new Wrapper(arr)
+        return arr
       } catch (e) {
         this.handleError(e)
       }
@@ -1065,7 +1037,7 @@ import { LppBoundArg } from './impl/boundarg'
     constructObject(
       args: Record<string, unknown>,
       util: VM.BlockUtility
-    ): Wrapper<LppObject> {
+    ): LppObject {
       try {
         const { thread } = util
         this.util = util
@@ -1073,8 +1045,8 @@ import { LppBoundArg } from './impl/boundarg'
         const block = this.getActiveBlockInstance(args, thread)
         const len = parseInt(this.getMutation(block)?.length ?? '0', 10)
         for (let i = 0; i < len; i++) {
-          let key = Wrapper.unwrap(args[`KEY_${i}`])
-          const value = Wrapper.unwrap(args[`VALUE_${i}`])
+          let key = args[`KEY_${i}`]
+          const value = args[`VALUE_${i}`]
           if (typeof key === 'string' || typeof key === 'number') {
             key = `${key}`
           } else if (key instanceof LppConstant) {
@@ -1089,7 +1061,7 @@ import { LppBoundArg } from './impl/boundarg'
             throw new LppError('syntaxError')
           obj.set(key as string, asValue(value))
         }
-        return new Wrapper(obj)
+        return obj
       } catch (e) {
         this.handleError(e)
       }
@@ -1103,7 +1075,7 @@ import { LppBoundArg } from './impl/boundarg'
     constructFunction(
       args: Record<string, unknown>,
       util: VM.BlockUtility
-    ): Wrapper<LppFunction> {
+    ): LppFunction {
       try {
         const { thread, target } = util
         this.util = util
@@ -1122,17 +1094,15 @@ import { LppBoundArg } from './impl/boundarg'
         }
         const blocks = thread.target.blocks
         const lppThread = thread as Thread
-        return new Wrapper(
-          Metadata.attach(
-            new LppFunction(this.executeScratch.bind(this, Target)),
-            new Serialization.ScratchMetadata(
-              'function',
-              signature,
-              [blocks, block.id],
-              target.sprite.clones[0].id,
-              target.id,
-              lppThread.lpp
-            )
+        return Metadata.attach(
+          new LppFunction(this.executeScratch.bind(this, Target)),
+          new Serialization.ScratchMetadata(
+            'function',
+            signature,
+            [blocks, block.id],
+            target.sprite.clones[0].id,
+            target.id,
+            lppThread.lpp
           )
         )
       } catch (e) {
@@ -1148,7 +1118,7 @@ import { LppBoundArg } from './impl/boundarg'
     constructAsyncFunction(
       args: Record<string, unknown>,
       util: VM.BlockUtility
-    ): Wrapper<LppFunction> {
+    ): LppFunction {
       try {
         const { thread, target } = util
         this.util = util
@@ -1167,17 +1137,15 @@ import { LppBoundArg } from './impl/boundarg'
         }
         const blocks = thread.target.blocks
         const lppThread = thread as Thread
-        return new Wrapper(
-          Metadata.attach(
-            new LppFunction(this.executeScratchAsync.bind(this, Target)),
-            new Serialization.ScratchMetadata(
-              'asyncFunction',
-              signature,
-              [blocks, block.id],
-              target.sprite.clones[0].id,
-              target.id,
-              lppThread.lpp
-            )
+        return Metadata.attach(
+          new LppFunction(this.executeScratchAsync.bind(this, Target)),
+          new Serialization.ScratchMetadata(
+            'asyncFunction',
+            signature,
+            [blocks, block.id],
+            target.sprite.clones[0].id,
+            target.id,
+            lppThread.lpp
           )
         )
       } catch (e) {
@@ -1190,14 +1158,14 @@ import { LppBoundArg } from './impl/boundarg'
      * @param util Scratch util.
      * @returns The value of the variable. If it is not exist, returns null instead.
      */
-    var(args: { name: string }, util: VM.BlockUtility): Wrapper<LppReference> {
+    var(args: { name: string }, util: VM.BlockUtility): LppReference {
       try {
         const { thread } = util
         this.util = util
         const lppThread = thread as Thread
         if (lppThread.lpp) {
           const v = lppThread.lpp.get(args.name)
-          return new Wrapper(v)
+          return v
         }
         throw new LppError('useOutsideContext')
       } catch (e) {
@@ -1213,7 +1181,6 @@ import { LppBoundArg } from './impl/boundarg'
       try {
         const { thread } = util
         this.util = util
-        value = Wrapper.unwrap(value)
         if (!(value instanceof LppValue || value instanceof LppReference))
           throw new LppError('syntaxError')
         const val = asValue(value)
@@ -1282,7 +1249,6 @@ import { LppBoundArg } from './impl/boundarg'
       try {
         const { thread } = util
         this.util = util
-        value = Wrapper.unwrap(value)
         if (!(value instanceof LppValue || value instanceof LppReference))
           throw new LppError('syntaxError')
         const val = asValue(value)
@@ -1363,7 +1329,7 @@ import { LppBoundArg } from './impl/boundarg'
       try {
         // runtime hack by @FurryR.
         const block = this.getActiveBlockInstance(args, thread)
-        const dest = Wrapper.unwrap(args.var)
+        const dest = args.var
         if (!(dest instanceof LppReference)) throw new LppError('syntaxError')
         const id = block.inputs.SUBSTACK?.block
         if (!id) return

@@ -1,7 +1,6 @@
 import type * as OriginalVM from 'scratch-vm'
 import type * as Core from '../../core'
 import type * as Metadata from '../metadata'
-import { Wrapper } from '../wrapper'
 
 /**
  * Definition of runtime (with compiler support, for Turbowarp).
@@ -10,7 +9,6 @@ export interface LppCompatibleRuntime extends VM.Runtime {
   lpp?: {
     Core: typeof Core
     Metadata: typeof Metadata
-    Wrapper: typeof Wrapper
     version: string
   }
   requestUpdateMonitor?(state: Map<string, unknown>): boolean
