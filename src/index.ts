@@ -65,10 +65,9 @@ import { LppBoundArg } from './impl/boundarg'
     Scratch.translate
   )
 
-  let blockly: BlocklyInstance | undefined = undefined
+  let Blockly: BlocklyInstance | undefined = undefined
   Scratch.gui.getBlockly().then(ScratchBlocks => {
-    const Blockly = ScratchBlocks as unknown as BlocklyInstance
-    blockly = Blockly
+    Blockly = ScratchBlocks as unknown as BlocklyInstance
     function patchBlockly(Blockly: BlocklyInstance, extension: Extension) {
       const Events = Blockly.Events as unknown as {
         Change: BlocklyInstance['Events']['Abstract']
@@ -156,14 +155,14 @@ import { LppBoundArg } from './impl/boundarg'
           (value instanceof LppValue ||
             value instanceof LppReference ||
             value instanceof LppBoundArg) &&
-          blockly
+          Blockly
         ) {
           const actualValue =
             value instanceof LppBoundArg ? value : asValue(value)
           Dialog.show(
-            blockly as BlocklyInstance,
+            Blockly as BlocklyInstance,
             blockId,
-            [Inspector(blockly, vm, Scratch.translate, actualValue)],
+            [Inspector(Blockly, vm, Scratch.translate, actualValue)],
             actualValue instanceof LppConstant ? 'center' : 'left'
           )
         } else {
@@ -189,7 +188,7 @@ import { LppBoundArg } from './impl/boundarg'
                 Reflect.has(v, 'stateNode')
             )
             if (value instanceof LppValue) {
-              const inspector = Inspector(blockly, vm, Scratch.translate, value)
+              const inspector = Inspector(Blockly, vm, Scratch.translate, value)
               valueElement.style.textAlign = 'left'
               valueElement.style.backgroundColor = 'rgb(30, 30, 30)'
               valueElement.style.color = '#eeeeee'
@@ -1433,7 +1432,7 @@ import { LppBoundArg } from './impl/boundarg'
           const stack = thread.peekStack()
           if (stack) {
             warnError(
-              blockly,
+              Blockly,
               vm,
               Scratch.translate,
               e.id,
@@ -1451,7 +1450,7 @@ import { LppBoundArg } from './impl/boundarg'
      * @param e LppException object.
      */
     private handleException(e: LppException): never {
-      warnException(blockly, vm, Scratch.translate, e)
+      warnException(Blockly, vm, Scratch.translate, e)
       vm.runtime.stopAll()
       throw new Error('lpp: user exception')
     }
