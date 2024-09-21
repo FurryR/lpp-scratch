@@ -8,8 +8,8 @@ import {
   Blocks,
   LppCompatibleRuntime,
   Thread,
-  VM,
-  TargetConstructor
+  TargetConstructor,
+  type VM
 } from './impl/typing'
 import type * as ScratchBlocks from 'blockly/core'
 import {
@@ -50,181 +50,89 @@ import { ThreadController } from './impl/thread'
 import { LppBoundArg } from './impl/boundarg'
 ;(function (Scratch) {
   const color = '#808080'
+  const id = 'lpp'
   // Translations.
 
   if (Scratch.extensions.unsandboxed === false) {
     throw new Error('lpp must be loaded in unsandboxed mode.')
   }
-  // hijack Function.prototype.apply to get React element instance.
-  function hijack(fn: () => unknown): unknown {
-    const _orig = Function.prototype.apply
-    /**
-     * Hijack the Function.prototype.apply function.
-     * @param thisArg
-     * @returns thisArg.
-     */
-    Function.prototype.apply = function (thisArg: unknown): unknown {
-      return thisArg
-    }
-    const result = fn()
-    Function.prototype.apply = _orig
-    return result
-  }
-  function getVM(runtime: LppCompatibleRuntime): VM {
-    let virtualMachine: VM | undefined
-    if (runtime._events['QUESTION'] instanceof Array) {
-      for (const value of runtime._events['QUESTION']) {
-        const v = hijack(value) as
-          | {
-              props?: {
-                vm?: VM
-              }
-            }
-          | undefined
-        if (v?.props?.vm) {
-          virtualMachine = v?.props?.vm as VM | undefined
-          break
+
+  const BlocklyExtension = defineExtension(
+    id,
+    color,
+    Scratch.vm.runtime,
+    Scratch.translate
+  )
+  const vm = Scratch.vm as VM
+  const runtime = vm.runtime as LppCompatibleRuntime
+
+  let blockly: BlocklyInstance | undefined = undefined
+  Scratch.gui.getBlockly().then(ScratchBlocks => {
+    const Blockly = ScratchBlocks as unknown as BlocklyInstance
+    blockly = Blockly
+    function patchBlockly(Blockly: BlocklyInstance, extension: Extension) {
+      const Events = Blockly.Events as unknown as {
+        Change: BlocklyInstance['Events']['Abstract']
+        Create: BlocklyInstance['Events']['Abstract']
+        Move: BlocklyInstance['Events']['Abstract']
+      }
+      // Patch: redo bug -- force re-render the block after change
+      const _Change = Events.Change.prototype.run
+      Events.Change.prototype.run = function (_forward: boolean) {
+        _Change.call(this, _forward)
+        const self = this as unknown as {
+          blockId: string
+        }
+        const block = this.getEventWorkspace_().getBlockById(
+          self.blockId
+        ) as ScratchBlocks.BlockSvg | null
+        if (block instanceof Blockly.BlockSvg) {
+          block.initSvg()
+          block.render()
         }
       }
-    } else if (runtime._events['QUESTION']) {
-      virtualMachine = (
-        hijack(runtime._events['QUESTION']) as
-          | {
-              props?: {
-                vm?: VM
-              }
-            }
-          | undefined
-      )?.props?.vm as VM | undefined
-    }
-    if (!virtualMachine)
-      throw new Error('lpp cannot get Virtual Machine instance.')
-    return virtualMachine
-  }
-  function getBlockly(vm: VM): BlocklyInstance | undefined {
-    let Blockly: BlocklyInstance | undefined
-    if (vm._events['EXTENSION_ADDED'] instanceof Array) {
-      for (const value of vm._events['EXTENSION_ADDED']) {
-        const v = hijack(value) as
-          | {
-              ScratchBlocks?: BlocklyInstance
-            }
-          | undefined
-        if (v?.ScratchBlocks) {
-          Blockly = v?.ScratchBlocks
-          break
+      // Patch: undo bug -- silent fail if block is not exist
+      const _Move = Events.Move.prototype.run
+      Events.Move.prototype.run = function (_forward: boolean) {
+        // pre-check before run
+        const self = this as unknown as {
+          blockId: string
         }
+        const block = this.getEventWorkspace_().getBlockById(
+          self.blockId
+        ) as ScratchBlocks.BlockSvg | null
+        if (block) _Move.call(this, _forward)
       }
-    } else if (vm._events['EXTENSION_ADDED']) {
-      Blockly = (
-        hijack(vm._events['EXTENSION_ADDED']) as
-          | {
-              ScratchBlocks?: BlocklyInstance
-            }
-          | undefined
-      )?.ScratchBlocks
+      const _Create = Events.Create.prototype.run
+      Events.Create.prototype.run = function (_forward: boolean) {
+        // patch before run
+        const self = this as unknown as {
+          ids: string[]
+        }
+        const res: string[] = []
+        const workspace = this.getEventWorkspace_()
+        for (const id of self.ids) {
+          if (workspace.getBlockById(id)) res.push(id)
+        }
+        self.ids = res
+        _Create.call(this, _forward)
+      }
+      extension.inject(Blockly)
     }
-    return Blockly
-  }
+    patchBlockly(Blockly, BlocklyExtension)
+  })
   /**
    * The extension class.
    */
   class LppExtension implements Scratch.Extension {
-    /**
-     * Extension ID.
-     */
-    static id: string = 'lpp'
-    /**
-     * Virtual machine instance.
-     */
-    readonly vm: VM
-    /**
-     * ScratchBlocks instance.
-     */
-    Blockly?: BlocklyInstance
-    /**
-     * Blockly extension.
-     */
-    readonly extension: Extension
     /**
      * Scratch util.
      */
     util?: VM.BlockUtility
     /**
      * Construct a new instance of lpp.
-     * @param originalRuntime Scratch runtime.
      */
-    constructor(originalRuntime: VM.Runtime) {
-      function patchBlockly(Blockly: BlocklyInstance, extension: Extension) {
-        const Events = Blockly.Events as unknown as {
-          Change: BlocklyInstance['Events']['Abstract']
-          Create: BlocklyInstance['Events']['Abstract']
-          Move: BlocklyInstance['Events']['Abstract']
-        }
-        // Patch: redo bug -- force re-render the block after change
-        const _Change = Events.Change.prototype.run
-        Events.Change.prototype.run = function (_forward: boolean) {
-          _Change.call(this, _forward)
-          const self = this as unknown as {
-            blockId: string
-          }
-          const block = this.getEventWorkspace_().getBlockById(
-            self.blockId
-          ) as ScratchBlocks.BlockSvg | null
-          if (block instanceof Blockly.BlockSvg) {
-            block.initSvg()
-            block.render()
-          }
-        }
-        // Patch: undo bug -- silent fail if block is not exist
-        const _Move = Events.Move.prototype.run
-        Events.Move.prototype.run = function (_forward: boolean) {
-          // pre-check before run
-          const self = this as unknown as {
-            blockId: string
-          }
-          const block = this.getEventWorkspace_().getBlockById(
-            self.blockId
-          ) as ScratchBlocks.BlockSvg | null
-          if (block) _Move.call(this, _forward)
-        }
-        const _Create = Events.Create.prototype.run
-        Events.Create.prototype.run = function (_forward: boolean) {
-          // patch before run
-          const self = this as unknown as {
-            ids: string[]
-          }
-          const res: string[] = []
-          const workspace = this.getEventWorkspace_()
-          for (const id of self.ids) {
-            if (workspace.getBlockById(id)) res.push(id)
-          }
-          self.ids = res
-          _Create.call(this, _forward)
-        }
-        extension.inject(Blockly)
-      }
-      const runtime = originalRuntime as LppCompatibleRuntime
-      this.Blockly = undefined
-      // step 1: get virtual machine instance
-      this.vm = getVM(runtime)
-      this.extension = defineExtension(
-        LppExtension.id,
-        color,
-        this.vm.runtime,
-        Scratch.translate
-      )
-      // step 2: get ScratchBlocks instance
-      this.Blockly = getBlockly(this.vm)
-      if (this.Blockly) patchBlockly(this.Blockly, this.extension)
-      else
-        this.vm.once('workspaceUpdate', () => {
-          const newBlockly = getBlockly(this.vm)
-          if (newBlockly && newBlockly !== this.Blockly) {
-            this.Blockly = newBlockly
-            patchBlockly(newBlockly, this.extension)
-          }
-        })
+    constructor() {
       // Ignore SAY and QUESTION calls on dummy target.
       const _emit = runtime.emit
       runtime.emit = (event: string, ...args: unknown[]) => {
@@ -250,16 +158,16 @@ import { LppBoundArg } from './impl/boundarg'
           (unwrappedValue instanceof LppValue ||
             unwrappedValue instanceof LppReference ||
             unwrappedValue instanceof LppBoundArg) &&
-          this.Blockly
+          blockly
         ) {
           const actualValue =
             unwrappedValue instanceof LppBoundArg
               ? unwrappedValue
               : asValue(unwrappedValue)
           Dialog.show(
-            this.Blockly as BlocklyInstance,
+            blockly as BlocklyInstance,
             blockId,
-            [Inspector(this.Blockly, this.vm, Scratch.translate, actualValue)],
+            [Inspector(blockly, vm, Scratch.translate, actualValue)],
             actualValue instanceof LppConstant ? 'center' : 'left'
           )
         } else {
@@ -285,12 +193,7 @@ import { LppBoundArg } from './impl/boundarg'
                 Reflect.has(v, 'stateNode')
             )
             if (value instanceof LppValue) {
-              const inspector = Inspector(
-                this.Blockly,
-                this.vm,
-                Scratch.translate,
-                value
-              )
+              const inspector = Inspector(blockly, vm, Scratch.translate, value)
               valueElement.style.textAlign = 'left'
               valueElement.style.backgroundColor = 'rgb(30, 30, 30)'
               valueElement.style.color = '#eeeeee'
@@ -585,16 +488,16 @@ import { LppBoundArg } from './impl/boundarg'
      * @returns Extension info.
      */
     getInfo(): Scratch.Info {
-      // if (this.Blockly) this.extension.inject(this.Blockly)
+      // if (blockly) this.extension.inject(blockly)
       return {
-        id: LppExtension.id,
+        id,
         name: Scratch.translate({
           id: 'lpp.name',
           default: 'lpp',
           description: 'Extension name.'
         }),
         color1: color,
-        blocks: this.extension.export()
+        blocks: BlocklyExtension.export()
       }
     }
     /**
@@ -937,7 +840,7 @@ import { LppBoundArg } from './impl/boundarg'
                       thread.lpp?.resolve(
                         new LppException(ctx.args[0] ?? new LppConstant(null))
                       )
-                      this.vm.runtime.sequencer.retireThread(thread)
+                      vm.runtime.sequencer.retireThread(thread)
                       resolve(new LppConstant(null))
                       return new LppReturn(new LppConstant(null))
                     })
@@ -1324,7 +1227,7 @@ import { LppBoundArg } from './impl/boundarg'
               if (!(then.value instanceof LppFunction)) {
                 lpp.detach()
                 lpp.promise?.resolve(val)
-                return this.vm.runtime.sequencer.retireThread(thread)
+                return vm.runtime.sequencer.retireThread(thread)
               }
               thenFn = then.value
               thenSelf = then.parent.deref() ?? new LppConstant(null)
@@ -1332,7 +1235,7 @@ import { LppBoundArg } from './impl/boundarg'
               if (!(then instanceof LppFunction)) {
                 lpp.detach()
                 lpp.promise?.resolve(val)
-                return this.vm.runtime.sequencer.retireThread(thread)
+                return vm.runtime.sequencer.retireThread(thread)
               }
               thenFn = then
               thenSelf = new LppConstant(null)
@@ -1344,13 +1247,13 @@ import { LppBoundArg } from './impl/boundarg'
                   thenFn.apply(thenSelf, [
                     new LppFunction(ctx => {
                       lpp.promise?.resolve(ctx.args[0] ?? new LppConstant(null))
-                      this.vm.runtime.sequencer.retireThread(thread)
+                      vm.runtime.sequencer.retireThread(thread)
                       resolve()
                       return new LppReturn(new LppConstant(null))
                     }),
                     new LppFunction(ctx => {
                       lpp.promise?.reject(ctx.args[0] ?? new LppConstant(null))
-                      this.vm.runtime.sequencer.retireThread(thread)
+                      vm.runtime.sequencer.retireThread(thread)
                       resolve()
                       return new LppReturn(new LppConstant(null))
                     })
@@ -1361,7 +1264,7 @@ import { LppBoundArg } from './impl/boundarg'
             )
           } else if (lpp instanceof LppFunctionContext) {
             lpp.resolve(new LppReturn(val))
-            return this.vm.runtime.sequencer.retireThread(thread)
+            return vm.runtime.sequencer.retireThread(thread)
           }
         }
         throw new LppError('useOutsideFunction')
@@ -1393,7 +1296,7 @@ import { LppBoundArg } from './impl/boundarg'
         )
         if (lppThread.lpp) {
           lppThread.lpp.resolve(result)
-          return this.vm.runtime.sequencer.retireThread(thread)
+          return vm.runtime.sequencer.retireThread(thread)
         }
         this.handleException(result)
       } catch (e) {
@@ -1419,7 +1322,7 @@ import { LppBoundArg } from './impl/boundarg'
         if (!id) return
         if (!this.util) throw new Error('lpp: util used initialization')
         const controller = new ThreadController(
-          this.vm.runtime as LppCompatibleRuntime,
+          vm.runtime as LppCompatibleRuntime,
           this.util
         )
         const parentThread = thread as Thread
@@ -1465,7 +1368,7 @@ import { LppBoundArg } from './impl/boundarg'
         if (!id) return
         if (!this.util) throw new Error('lpp: util used before initialization')
         const controller = new ThreadController(
-          this.vm.runtime as LppCompatibleRuntime,
+          vm.runtime as LppCompatibleRuntime,
           this.util
         )
         const captureId = block.inputs.SUBSTACK_2?.block
@@ -1544,7 +1447,7 @@ import { LppBoundArg } from './impl/boundarg'
         value !== undefined
       ) {
         if ((thread as Thread).isCompiled) {
-          this.vm.runtime.visualReport(thread.peekStack(), value)
+          vm.runtime.visualReport(thread.peekStack(), value)
         } else {
           return value
         }
@@ -1563,14 +1466,14 @@ import { LppBoundArg } from './impl/boundarg'
           const stack = thread.peekStack()
           if (stack) {
             warnError(
-              this.Blockly,
-              this.vm,
+              blockly,
+              vm,
               Scratch.translate,
               e.id,
               stack,
               thread.target.sprite.clones[0].id
             )
-            this.vm.runtime.stopAll()
+            vm.runtime.stopAll()
           }
         }
       }
@@ -1581,8 +1484,8 @@ import { LppBoundArg } from './impl/boundarg'
      * @param e LppException object.
      */
     private handleException(e: LppException): never {
-      warnException(this.Blockly, this.vm, Scratch.translate, e)
-      this.vm.runtime.stopAll()
+      warnException(blockly, vm, Scratch.translate, e)
+      vm.runtime.stopAll()
       throw new Error('lpp: user exception')
     }
     /**
@@ -1624,8 +1527,8 @@ import { LppBoundArg } from './impl/boundarg'
             v => args === v._argValues
           )?.id
       const block = id
-        ? container.getBlock(id) ?? this.vm.runtime.flyoutBlocks.getBlock(id)
-        : this.vm.runtime.flyoutBlocks.getBlock(thread.peekStack())
+        ? container.getBlock(id) ?? vm.runtime.flyoutBlocks.getBlock(id)
+        : vm.runtime.flyoutBlocks.getBlock(thread.peekStack())
       if (!block) {
         throw new Error('lpp: cannot get active block')
       }
@@ -1656,7 +1559,7 @@ import { LppBoundArg } from './impl/boundarg'
           blocks,
           name: ''
         },
-        this.vm.runtime
+        vm.runtime
       )
       target.id = ''
       const warnFn = () => {
@@ -1684,7 +1587,7 @@ import { LppBoundArg } from './impl/boundarg'
     ): T | PromiseProxy<T> {
       if (!this.util) throw new Error('lpp: util used before initialization')
       const controller = new ThreadController(
-        this.vm.runtime as LppCompatibleRuntime,
+        vm.runtime as LppCompatibleRuntime,
         this.util
       )
       const postProcess = () => {
@@ -1704,15 +1607,14 @@ import { LppBoundArg } from './impl/boundarg'
       ) {
         const metadata = ctx.fn.metadata
         let target: VM.Target | undefined
-        if (metadata.target)
-          target = this.vm.runtime.getTargetById(metadata.target)
+        if (metadata.target) target = vm.runtime.getTargetById(metadata.target)
         if (!target) target = this.createDummyTarget(Target, metadata.blocks[0])
         const id = metadata.blocks[0].getBlock(metadata.blocks[1])?.inputs
           .SUBSTACK?.block
         if (!id) return new LppReturn(new LppConstant(null))
         if (!this.util) throw new Error('lpp: util used before initialization')
         const controller = new ThreadController(
-          this.vm.runtime as LppCompatibleRuntime,
+          vm.runtime as LppCompatibleRuntime,
           this.util
         )
         const thread = controller.create(id, target)
@@ -1754,15 +1656,14 @@ import { LppBoundArg } from './impl/boundarg'
       ) {
         const metadata = ctx.fn.metadata
         let target: VM.Target | undefined
-        if (metadata.target)
-          target = this.vm.runtime.getTargetById(metadata.target)
+        if (metadata.target) target = vm.runtime.getTargetById(metadata.target)
         if (!target) target = this.createDummyTarget(Target, metadata.blocks[0])
         const id = metadata.blocks[0].getBlock(metadata.blocks[1])?.inputs
           .SUBSTACK?.block
         if (!id) return new LppReturn(new LppConstant(null))
         if (!this.util) throw new Error('lpp: util used before initialization')
         const controller = new ThreadController(
-          this.vm.runtime as LppCompatibleRuntime,
+          vm.runtime as LppCompatibleRuntime,
           this.util
         )
         const thread = controller.create(id, target)
@@ -1813,5 +1714,5 @@ import { LppBoundArg } from './impl/boundarg'
       return ffi.fromObject(info)
     }
   }
-  Scratch.extensions.register(new LppExtension(Scratch.vm.runtime))
+  Scratch.extensions.register(new LppExtension())
 })(Scratch)

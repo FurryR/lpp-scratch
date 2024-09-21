@@ -409,8 +409,8 @@ export function defineExtension(
       15,
       15,
       () => {
-        Blockly.Events.setGroup(true)
         if (block.mutationToDom && block.domToMutation) {
+          Blockly.Events.setGroup(true)
           const state = block.mutationToDom()
           const oldExtraState = Blockly.Xml.domToText(state)
           const length = state.getAttribute('length')
@@ -429,8 +429,8 @@ export function defineExtension(
               Blockly.Xml.domToText(block.mutationToDom())
             )
           )
+          Blockly.Events.setGroup(false)
         }
-        Blockly.Events.setGroup(false)
       },
       '+',
       false,
@@ -453,8 +453,8 @@ export function defineExtension(
       15,
       15,
       () => {
-        Blockly.Events.setGroup(true)
         if (block.mutationToDom && block.domToMutation) {
+          Blockly.Events.setGroup(true)
           const state = block.mutationToDom()
           const oldExtraState = Blockly.Xml.domToText(state)
           const length = state.getAttribute('length')
@@ -476,8 +476,8 @@ export function defineExtension(
               Blockly.Xml.domToText(block.mutationToDom())
             )
           )
+          Blockly.Events.setGroup(false)
         }
-        Blockly.Events.setGroup(false)
       },
       '-',
       false,
@@ -529,8 +529,14 @@ export function defineExtension(
         const blocks = target.blocks as VM.Blocks & {
           deleteBlock(id: string | null): void
         }
-        blocks.deleteBlock(input.block)
-        blocks.deleteBlock(input.shadow)
+        const targetBlock = blocks.getBlock(input.block)
+        if (!targetBlock || targetBlock.opcode === 'text') {
+          blocks.deleteBlock(input.block)
+          blocks.deleteBlock(input.shadow)
+        } else {
+          targetBlock.parent = null
+          targetBlock.topLevel = true
+        }
         delete inputs[name]
       }
     }
@@ -731,13 +737,14 @@ export function defineExtension(
                     block.moveInputBefore(`ARG_${i}`, 'END')
                   }
                 } else {
+                  Blockly.Events.disable()
                   const removeList: string[] = []
                   for (let i = length; i < block.length; i++) {
-                    block.removeInput(`ARG_${i}`, true)
-                    block.removeInput(`COMMA_${i}`, true)
                     removeList.push(`ARG_${i}`, `COMMA_${i}`)
                   }
+                  removeList.forEach(v => block.removeInput(v, true))
                   cleanInputs(block.id, removeList)
+                  Blockly.Events.enable()
                 }
                 block.length = length
                 updateButton(Blockly, block)
@@ -791,12 +798,9 @@ export function defineExtension(
                     block.moveInputBefore(`KEY_${i}`, `COLON_${i}`)
                   }
                 } else {
+                  Blockly.Events.disable()
                   const removeList: string[] = []
                   for (let i = length; i < block.length; i++) {
-                    block.removeInput(`KEY_${i}`, true)
-                    block.removeInput(`COLON_${i}`, true)
-                    block.removeInput(`VALUE_${i}`, true)
-                    block.removeInput(`COMMA_${i}`, true)
                     removeList.push(
                       `KEY_${i}`,
                       `COLON_${i}`,
@@ -804,7 +808,9 @@ export function defineExtension(
                       `COMMA_${i}`
                     )
                   }
+                  removeList.forEach(v => block.removeInput(v, true))
                   cleanInputs(block.id, removeList)
+                  Blockly.Events.enable()
                 }
                 block.length = length
                 updateButton(Blockly, block)
@@ -862,13 +868,14 @@ export function defineExtension(
                     block.moveInputBefore(`ARG_${i}`, 'END')
                   }
                 } else {
+                  Blockly.Events.disable()
                   const removeList: string[] = []
                   for (let i = length; i < block.length; i++) {
-                    block.removeInput(`ARG_${i}`, true)
-                    block.removeInput(`COMMA_${i}`, true)
                     removeList.push(`ARG_${i}`, `COMMA_${i}`)
                   }
+                  removeList.forEach(v => block.removeInput(v, true))
                   cleanInputs(block.id, removeList)
+                  Blockly.Events.enable()
                 }
                 block.length = length
                 updateButton(Blockly, block)
@@ -926,13 +933,14 @@ export function defineExtension(
                     block.moveInputBefore(`ARG_${i}`, 'END')
                   }
                 } else {
+                  Blockly.Events.disable()
                   const removeList: string[] = []
                   for (let i = length; i < block.length; i++) {
-                    block.removeInput(`ARG_${i}`, true)
-                    block.removeInput(`COMMA_${i}`, true)
                     removeList.push(`ARG_${i}`, `COMMA_${i}`)
                   }
+                  removeList.forEach(v => block.removeInput(v, true))
                   cleanInputs(block.id, removeList)
+                  Blockly.Events.enable()
                 }
                 block.length = length
                 updateButton(Blockly, block)
@@ -1056,9 +1064,9 @@ export function defineExtension(
                     block.moveInputBefore(`ARG_${i}`, 'END')
                   }
                 } else {
+                  Blockly.Events.disable()
                   const removeList: string[] = []
                   for (let i = length; i < block.length; i++) {
-                    block.removeInput(`ARG_${i}`, true)
                     block.removeInput(`OP_${i}`, true)
                     const fields = runtime
                       .getEditingTarget()
@@ -1066,7 +1074,9 @@ export function defineExtension(
                     if (fields) delete fields[`OP_${i}`]
                     removeList.push(`ARG_${i}`)
                   }
+                  removeList.forEach(v => block.removeInput(v, true))
                   cleanInputs(block.id, removeList)
+                  Blockly.Events.enable()
                 }
                 block.length = length
                 updateButton(Blockly, block, 2)
@@ -1145,13 +1155,14 @@ export function defineExtension(
                     block.moveInputBefore(`ARG_${i}`, 'END')
                   }
                 } else {
+                  Blockly.Events.disable()
                   const removeList: string[] = []
                   for (let i = length; i < block.length; i++) {
-                    block.removeInput(`ARG_${i}`, true)
-                    block.removeInput(`COMMA_${i}`, true)
                     removeList.push(`ARG_${i}`, `COMMA_${i}`)
                   }
+                  removeList.forEach(v => block.removeInput(v, true))
                   cleanInputs(block.id, removeList)
+                  Blockly.Events.enable()
                 }
                 block.length = length
                 updateButton(Blockly, block)
@@ -1202,13 +1213,14 @@ export function defineExtension(
                     block.moveInputBefore(`ARG_${i}`, 'END')
                   }
                 } else {
+                  Blockly.Events.disable()
                   const removeList: string[] = []
                   for (let i = length; i < block.length; i++) {
-                    block.removeInput(`ARG_${i}`, true)
-                    block.removeInput(`COMMA_${i}`, true)
                     removeList.push(`ARG_${i}`, `COMMA_${i}`)
                   }
+                  removeList.forEach(v => block.removeInput(v, true))
                   cleanInputs(block.id, removeList)
+                  Blockly.Events.enable()
                 }
                 block.length = length
                 updateButton(Blockly, block)

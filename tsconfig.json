@@ -50,7 +50,6 @@
     "node_modules/@turbowarp/types/types/scratch-vm-extension.d.ts",
     "types/universal.d.ts",
     "types/turbowarp.d.ts", // For better experience on Turbowarp
-    "types/gandi.d.ts", // For better experience on Gandi IDE
     "src/**/*",
     "tsup.config.ts",
     "package.json"
