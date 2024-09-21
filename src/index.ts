@@ -56,14 +56,14 @@ import { LppBoundArg } from './impl/boundarg'
     throw new Error('lpp must be loaded in unsandboxed mode.')
   }
 
+  const vm = Scratch.vm as VM
+  const runtime = vm.runtime as LppCompatibleRuntime
   const BlocklyExtension = defineExtension(
     id,
     color,
-    Scratch.vm.runtime,
+    runtime,
     Scratch.translate
   )
-  const vm = Scratch.vm as VM
-  const runtime = vm.runtime as LppCompatibleRuntime
 
   let blockly: BlocklyInstance | undefined = undefined
   Scratch.gui.getBlockly().then(ScratchBlocks => {
