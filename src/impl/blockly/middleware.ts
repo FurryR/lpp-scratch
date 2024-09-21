@@ -10,7 +10,7 @@ function _ReporterBase(
 ): BlockDescriptor {
   const prepatch = (Blockly: BlocklyInstance, block: Block) => {
     const SHAPE_MAP = {
-      square: Blockly.OUTPUT_SHAPE_ROUND,
+      square: Blockly.OUTPUT_SHAPE_SQUARE,
       round: Blockly.OUTPUT_SHAPE_ROUND,
       hexagon: Blockly.OUTPUT_SHAPE_HEXAGONAL
     } as const
