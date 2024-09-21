@@ -6,15 +6,16 @@ function _ReporterBase(
     Blockly: BlocklyInstance,
     block: Block
   ) => BlockMap | ((...args: never[]) => unknown),
-  type: 'square' | 'round'
+  type: 'square' | 'round' | 'hexagon'
 ): BlockDescriptor {
   const prepatch = (Blockly: BlocklyInstance, block: Block) => {
-    block.setOutput(true, 'String')
-    block.setOutputShape(
-      type === 'square'
-        ? Blockly.OUTPUT_SHAPE_SQUARE
-        : Blockly.OUTPUT_SHAPE_ROUND
-    )
+    const SHAPE_MAP = {
+      square: Blockly.OUTPUT_SHAPE_ROUND,
+      round: Blockly.OUTPUT_SHAPE_ROUND,
+      hexagon: Blockly.OUTPUT_SHAPE_HEXAGONAL
+    } as const
+    block.setOutput(true, type === 'hexagon' ? 'Boolean' : 'String')
+    block.setOutputShape(SHAPE_MAP[type])
   }
   return {
     init(Blockly, block) {
@@ -78,6 +79,11 @@ export function Command(
  * Middlewares to set a block as reporter.
  */
 export namespace Reporter {
+  /**
+   * Middleware to set a block as reporter with square shape.
+   * @param fn Function.
+   * @returns Processed function.
+   */
   export function Square(
     fn: (
       Blockly: BlocklyInstance,
@@ -98,5 +104,18 @@ export namespace Reporter {
     ) => BlockMap | ((...args: never[]) => unknown)
   ): BlockDescriptor {
     return _ReporterBase(fn, 'round')
+  }
+  /**
+   * Middleware to set a block as reporter with hexagon shape.
+   * @param fn Function.
+   * @returns Processed function.
+   */
+  export function Hexagon(
+    fn: (
+      Blockly: BlocklyInstance,
+      block: Block
+    ) => BlockMap | ((...args: never[]) => unknown)
+  ): BlockDescriptor {
+    return _ReporterBase(fn, 'hexagon')
   }
 }

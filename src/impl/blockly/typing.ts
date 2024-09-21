@@ -26,6 +26,7 @@ export interface BlocklyInstance extends _BlocklyInstance {
   }
   OUTPUT_SHAPE_SQUARE: number
   OUTPUT_SHAPE_ROUND: number
+  OUTPUT_SHAPE_HEXAGONAL: number
 }
 /**
  * extended ScratchBlocks.BlockSvg interface.
